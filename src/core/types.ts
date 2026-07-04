@@ -1,22 +1,22 @@
 // src/core/types.ts
+export type Point = { x: number; y: number };
+
 export type VisualizationState = {
   type: 'array' | 'scatter' | 'grid' | 'graph';
-  data: number[];
+  data: number[] | Point[]; // <-- Now supports both!
   highlights: {
     indices?: number[];
-    coordinates?: { x: number; y: number }[];
+    coordinates?: Point[];
   };
   metadata: {
     comparisons?: number;
     swaps?: number;
     generation?: number;
+    fitness?: number;
     currentLine?: number;
   };
 };
 
-// Use a simpler type definition that Vite can understand
-export type AlgorithmGenerator = {
+export interface AlgorithmGenerator {
   next(): { done: boolean; value: VisualizationState };
-  return?(value: any): { done: boolean; value: any };
-  throw?(e: any): { done: boolean; value: any };
-};
+}
