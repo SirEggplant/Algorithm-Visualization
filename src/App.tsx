@@ -8,6 +8,7 @@ import HistoryLog, { type HistoryEntry } from './ui/HistoryLog';
 import { drawArray } from './renderers/arrayRenderer';
 import { bubbleSortGenerator } from './algorithms/sorting/bubbleSort';
 import { mergeSortGenerator } from './algorithms/sorting/mergeSort';
+import { quickSortGenerator } from './algorithms/sorting/quickSort'; 
 
 // Hill Climbing Feature
 import { drawScatter, disposeScatterRenderer } from './renderers/scatterRenderer';
@@ -15,7 +16,7 @@ import { hillClimbingGenerator } from './algorithms/hillClimbing/peakFinder';
 
 // --- Types ---
 type Feature = 'sorting' | 'optimization';
-type SortingAlgo = 'bubble' | 'merge';
+type SortingAlgo = 'bubble' | 'merge' | 'quick';
 type OptimizationAlgo = 'hillClimbing';
 type PlayState = 'idle' | 'playing' | 'paused';
 type SpeedOption = 'slow' | 'normal' | 'fast' | 'turbo';
@@ -30,7 +31,7 @@ const SPEED_MAP: Record<SpeedOption, number> = {
 
 // Feature -> Algorithms mapping
 const featureAlgorithms: Record<Feature, string[]> = {
-  sorting: ['bubble', 'merge'],
+  sorting: ['bubble', 'merge', 'quick'],
   optimization: ['hillClimbing'],
 };
 
@@ -38,6 +39,7 @@ const featureAlgorithms: Record<Feature, string[]> = {
 const algorithmDisplayNames: Record<string, string> = {
   bubble: 'Bubble Sort',
   merge : 'Merge Sort',
+  quick: 'Quick Sort' ,
   hillClimbing: '⛰️ Hill Climbing',
 };
 
@@ -104,7 +106,10 @@ function App() {
     generator = bubbleSortGenerator(array);
   } else if (selectedFeature === 'sorting' && selectedAlgo === 'merge') {
     if (array.length === 0) return;
-    generator = mergeSortGenerator(array);  // 👈 ADD THIS
+    generator = mergeSortGenerator(array);
+  } else if (selectedFeature === 'sorting' && selectedAlgo === 'quick') {
+    if (array.length === 0) return;
+    generator = quickSortGenerator(array);
   } else if (selectedFeature === 'optimization' && selectedAlgo === 'hillClimbing') {
     generator = hillClimbingGenerator();
   } else {
