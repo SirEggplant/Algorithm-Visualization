@@ -77,7 +77,7 @@ export function* bubbleSortGenerator(input: number[]): AlgorithmGenerator {
     metadata: {
       comparisons,
       swaps,
-      action: '✅ Sort complete!',
+      action: 'Sort complete!',
     },
   };
 }

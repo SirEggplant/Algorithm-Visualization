@@ -7,6 +7,7 @@ import HistoryLog, { type HistoryEntry } from './ui/HistoryLog';
 // Sorting Feature
 import { drawArray } from './renderers/arrayRenderer';
 import { bubbleSortGenerator } from './algorithms/sorting/bubbleSort';
+import { mergeSortGenerator } from './algorithms/sorting/mergeSort';
 
 // Hill Climbing Feature
 import { drawScatter, disposeScatterRenderer } from './renderers/scatterRenderer';
@@ -14,7 +15,7 @@ import { hillClimbingGenerator } from './algorithms/hillClimbing/peakFinder';
 
 // --- Types ---
 type Feature = 'sorting' | 'optimization';
-type SortingAlgo = 'bubble';
+type SortingAlgo = 'bubble' | 'merge';
 type OptimizationAlgo = 'hillClimbing';
 type PlayState = 'idle' | 'playing' | 'paused';
 type SpeedOption = 'slow' | 'normal' | 'fast' | 'turbo';
@@ -29,13 +30,14 @@ const SPEED_MAP: Record<SpeedOption, number> = {
 
 // Feature -> Algorithms mapping
 const featureAlgorithms: Record<Feature, string[]> = {
-  sorting: ['bubble'],
+  sorting: ['bubble', 'merge'],
   optimization: ['hillClimbing'],
 };
 
 // Display names
 const algorithmDisplayNames: Record<string, string> = {
-  bubble: '🔵 Bubble Sort',
+  bubble: 'Bubble Sort',
+  merge : 'Merge Sort',
   hillClimbing: '⛰️ Hill Climbing',
 };
 
@@ -97,14 +99,17 @@ function App() {
     }
 
     let generator;
-    if (selectedFeature === 'sorting' && selectedAlgo === 'bubble') {
-      if (array.length === 0) return;
-      generator = bubbleSortGenerator(array);
-    } else if (selectedFeature === 'optimization' && selectedAlgo === 'hillClimbing') {
-      generator = hillClimbingGenerator();
-    } else {
-      return;
-    }
+  if (selectedFeature === 'sorting' && selectedAlgo === 'bubble') {
+    if (array.length === 0) return;
+    generator = bubbleSortGenerator(array);
+  } else if (selectedFeature === 'sorting' && selectedAlgo === 'merge') {
+    if (array.length === 0) return;
+    generator = mergeSortGenerator(array);  // 👈 ADD THIS
+  } else if (selectedFeature === 'optimization' && selectedAlgo === 'hillClimbing') {
+    generator = hillClimbingGenerator();
+  } else {
+    return;
+  }
 
     // Reset history when starting fresh
     setHistory([]);
