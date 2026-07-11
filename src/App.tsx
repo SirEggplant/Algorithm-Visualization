@@ -12,17 +12,31 @@ import { bubbleSortGenerator } from './algorithms/sorting/bubbleSort';
 import { drawScatter, disposeScatterRenderer } from './renderers/scatterRenderer';
 import { hillClimbingGenerator } from './algorithms/hillClimbing/peakFinder';
 
-const ARRAY_SIZE = 15;
-
-type AlgorithmOption = 'bubble' | 'hillClimbing';
+// --- Types ---
+type Feature = 'sorting' | 'optimization';
+type SortingAlgo = 'bubble';
+type OptimizationAlgo = 'hillClimbing';
 type PlayState = 'idle' | 'playing' | 'paused';
 type SpeedOption = 'slow' | 'normal' | 'fast' | 'turbo';
+type ArraySize = 25 | 50 | 100 | 200;
 
 const SPEED_MAP: Record<SpeedOption, number> = {
   slow: 300,
   normal: 100,
   fast: 30,
   turbo: 5,
+};
+
+// Feature -> Algorithms mapping
+const featureAlgorithms: Record<Feature, string[]> = {
+  sorting: ['bubble'],
+  optimization: ['hillClimbing'],
+};
+
+// Display names
+const algorithmDisplayNames: Record<string, string> = {
+  bubble: '🔵 Bubble Sort',
+  hillClimbing: '⛰️ Hill Climbing',
 };
 
 function App() {
@@ -32,7 +46,9 @@ function App() {
 
   // Core state
   const [array, setArray] = useState<number[]>([]);
-  const [selectedAlgo, setSelectedAlgo] = useState<AlgorithmOption>('bubble');
+  const [arraySize, setArraySize] = useState<ArraySize>(50);
+  const [selectedFeature, setSelectedFeature] = useState<Feature>('sorting');
+  const [selectedAlgo, setSelectedAlgo] = useState<string>('bubble');
   const [playState, setPlayState] = useState<PlayState>('idle');
   const [speed, setSpeed] = useState<SpeedOption>('normal');
   const [metadata, setMetadata] = useState<string>('');
@@ -40,7 +56,8 @@ function App() {
   // History state
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [currentHistoryIndex, setCurrentHistoryIndex] = useState<number>(-1);
-  const prevAlgoRef = useRef<AlgorithmOption>(selectedAlgo);
+  const prevFeatureRef = useRef<Feature>(selectedFeature);
+  const prevAlgoRef = useRef<string>(selectedAlgo);
 
   // --- Core Functions ---
 
@@ -80,11 +97,13 @@ function App() {
     }
 
     let generator;
-    if (selectedAlgo === 'bubble') {
+    if (selectedFeature === 'sorting' && selectedAlgo === 'bubble') {
       if (array.length === 0) return;
       generator = bubbleSortGenerator(array);
-    } else {
+    } else if (selectedFeature === 'optimization' && selectedAlgo === 'hillClimbing') {
       generator = hillClimbingGenerator();
+    } else {
+      return;
     }
 
     // Reset history when starting fresh
@@ -93,16 +112,14 @@ function App() {
 
     engineRef.current.load(generator);
     engineRef.current.onUpdate = (state: VisualizationState) => {
-      // Update UI
       updateUIWithState(state);
 
-      // Push to history (only if not in replay mode)
       if (!replayIntervalRef.current) {
         setHistory((prev) => {
           const newEntry: HistoryEntry = {
             step: prev.length + 1,
             action: state.metadata.action || `Step ${prev.length + 1}`,
-            state: JSON.parse(JSON.stringify(state)), // Deep clone to preserve history
+            state: JSON.parse(JSON.stringify(state)),
           };
           return [...prev, newEntry];
         });
@@ -112,7 +129,7 @@ function App() {
 
     setPlayState('playing');
     engineRef.current.play(SPEED_MAP[speed]);
-  }, [selectedAlgo, array, speed, updateUIWithState]);
+  }, [selectedFeature, selectedAlgo, array, speed, updateUIWithState]);
 
   const pauseAlgorithm = useCallback(() => {
     engineRef.current.pause();
@@ -143,8 +160,11 @@ function App() {
   }, [playState, startAlgorithm, pauseAlgorithm, resumeAlgorithm]);
 
   const generateArray = useCallback(() => {
-    if (selectedAlgo !== 'bubble') return;
-    const newArr = Array.from({ length: ARRAY_SIZE }, () => Math.floor(Math.random() * 100) + 5);
+    if (selectedFeature !== 'sorting') return;
+    const newArr = Array.from(
+      { length: arraySize },
+      () => Math.floor(Math.random() * 200) + 1
+    );
     setArray(newArr);
     engineRef.current.pause();
     if (replayIntervalRef.current) {
@@ -158,35 +178,86 @@ function App() {
       drawArray(canvasRef.current, {
         type: 'array',
         data: newArr,
-        highlights: { indices: [] },
+        highlights: {},
         metadata: { action: 'Ready to sort!' },
       });
     }
     setMetadata('Ready to sort!');
-  }, [selectedAlgo]);
+  }, [selectedFeature, arraySize]);
 
-  const stepForward = useCallback(() => {
-    if (selectedAlgo === 'bubble' && array.length === 0) return;
+// --- Updated "Next" Button Logic ---
+const stepForward = useCallback(() => {
+  // 1. If playing, pause first
+  if (playState === 'playing') {
     engineRef.current.pause();
     if (replayIntervalRef.current) {
       clearInterval(replayIntervalRef.current);
       replayIntervalRef.current = null;
     }
     setPlayState('paused');
-    if (!engineRef.current['generator']) {
-      startAlgorithm();
-    } else {
-      engineRef.current.step();
-    }
-  }, [selectedAlgo, array, startAlgorithm]);
+  }
 
-  // --- Revert to History Step with Fast Animation ---
+  // 2. Check if we are browsing PAST history (i.e., currentIndex < history.length - 1)
+  if (history.length > 0 && currentHistoryIndex < history.length - 1) {
+    // Navigate to the next step in the stored history
+    const nextIndex = currentHistoryIndex + 1;
+    const nextEntry = history[nextIndex];
+    if (nextEntry) {
+      updateUIWithState(nextEntry.state);
+      setCurrentHistoryIndex(nextIndex);
+      // Ensure the engine stays paused
+      engineRef.current.pause();
+      setPlayState('paused');
+      return;
+    }
+  }
+
+  // 3. If we reached here, we are at the LATEST step. 
+  //    We need to generate a NEW step from the engine.
+  if (selectedFeature === 'sorting' && array.length === 0) return;
+
+  // Check if the engine has a generator loaded. If not, load one.
+  if (!engineRef.current['generator']) {
+    let generator;
+    if (selectedFeature === 'sorting' && selectedAlgo === 'bubble') {
+      if (array.length === 0) return;
+      generator = bubbleSortGenerator(array);
+    } else if (selectedFeature === 'optimization' && selectedAlgo === 'hillClimbing') {
+      generator = hillClimbingGenerator();
+    } else {
+      return;
+    }
+
+    // Set up the engine with the generator and the update callback
+    engineRef.current.load(generator);
+    engineRef.current.onUpdate = (state: VisualizationState) => {
+      updateUIWithState(state);
+      // Push the new state to history
+      setHistory((prev) => {
+        const newEntry: HistoryEntry = {
+          step: prev.length + 1,
+          action: state.metadata.action || `Step ${prev.length + 1}`,
+          state: JSON.parse(JSON.stringify(state)),
+        };
+        return [...prev, newEntry];
+      });
+      setCurrentHistoryIndex((prev) => prev + 1);
+    };
+  }
+
+  // 4. Perform a single step from the engine
+  engineRef.current.pause(); // Ensure paused
+  setPlayState('paused');
+  engineRef.current.step();
+
+}, [currentHistoryIndex, history, playState, selectedFeature, selectedAlgo, array, updateUIWithState]);
+
+  // --- Revert to History Step ---
   const revertToStep = useCallback(
     (targetIndex: number) => {
       if (targetIndex < 0 || targetIndex >= history.length) return;
-      if (playState === 'playing') return; // Can't revert while playing
+      if (playState === 'playing') return;
 
-      // Pause everything
       engineRef.current.pause();
       if (replayIntervalRef.current) {
         clearInterval(replayIntervalRef.current);
@@ -195,7 +266,6 @@ function App() {
 
       const startIndex = currentHistoryIndex;
       if (startIndex >= targetIndex) {
-        // If going backwards or same, just jump instantly
         const entry = history[targetIndex];
         updateUIWithState(entry.state);
         setCurrentHistoryIndex(targetIndex);
@@ -203,9 +273,8 @@ function App() {
         return;
       }
 
-      // Forward replay animation from startIndex+1 to targetIndex
       let current = startIndex;
-      setPlayState('paused'); // Keep paused but visually replay
+      setPlayState('paused');
 
       replayIntervalRef.current = window.setInterval(() => {
         current++;
@@ -220,12 +289,12 @@ function App() {
           updateUIWithState(entry.state);
           setCurrentHistoryIndex(current);
         }
-      }, 20); // 20ms per step = 50 steps/second (fast animation)
+      }, 20);
     },
     [history, currentHistoryIndex, playState, updateUIWithState]
   );
 
-  // --- Speed change handler ---
+  // --- Speed change ---
   useEffect(() => {
     if (playState === 'playing') {
       engineRef.current.pause();
@@ -248,7 +317,7 @@ function App() {
     };
   }, [generateArray]);
 
-  // --- Handle algorithm switching ---
+  // --- Handle Feature / Algorithm switching ---
   useEffect(() => {
     engineRef.current.pause();
     if (replayIntervalRef.current) {
@@ -259,14 +328,16 @@ function App() {
     setHistory([]);
     setCurrentHistoryIndex(-1);
 
-    if (prevAlgoRef.current === 'hillClimbing' && selectedAlgo === 'bubble') {
+    // Dispose 3D renderer if leaving optimization
+    if (prevFeatureRef.current === 'optimization' && selectedFeature !== 'optimization') {
       if (canvasRef.current) {
         disposeScatterRenderer(canvasRef.current);
       }
     }
+    prevFeatureRef.current = selectedFeature;
     prevAlgoRef.current = selectedAlgo;
 
-    if (selectedAlgo === 'bubble') {
+    if (selectedFeature === 'sorting') {
       generateArray();
     } else {
       setMetadata('');
@@ -285,32 +356,43 @@ function App() {
         }
       }
     }
-  }, [selectedAlgo, generateArray]);
+  }, [selectedFeature, selectedAlgo, generateArray]);
 
-  // --- Determine Play Button Text ---
+  // --- Handle feature change -> reset algorithm to first in list ---
+  const handleFeatureChange = (feature: Feature) => {
+    setSelectedFeature(feature);
+    const firstAlgo = featureAlgorithms[feature][0];
+    setSelectedAlgo(firstAlgo);
+  };
+
+  // --- Play button config ---
   const getPlayButtonConfig = () => {
     if (playState === 'idle') return { text: '▶ Play', bg: '#2ed573' };
     if (playState === 'playing') return { text: '⏹ Stop', bg: '#ff4757' };
     return { text: '▶ Resume', bg: '#ffa502' };
   };
-
   const playConfig = getPlayButtonConfig();
+
+  // --- Determine if sorting is active (for array-specific controls) ---
+  const isSorting = selectedFeature === 'sorting';
 
   return (
     <div
       style={{
         height: '100vh',
+        maxHeight: '100vh',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        padding: '20px',
+        padding: '16px 20px',
         fontFamily: 'sans-serif',
         background: '#0a0e1a',
         color: '#e2e8f0',
         boxSizing: 'border-box',
       }}
     >
-      <h1 style={{ textAlign: 'center', marginBottom: '20px', flexShrink: 0 }}>
+      {/* Title */}
+      <h1 style={{ textAlign: 'center', margin: '0 0 12px 0', fontSize: '24px', flexShrink: 0 }}>
         ⚡ Algorithm Visualizer
       </h1>
 
@@ -319,98 +401,153 @@ function App() {
         style={{
           display: 'flex',
           justifyContent: 'center',
-          gap: '16px',
+          gap: '12px',
           flexWrap: 'wrap',
-          marginBottom: '20px',
+          marginBottom: '12px',
           alignItems: 'center',
           background: '#141b2d',
-          padding: '12px 24px',
-          borderRadius: '12px',
+          padding: '10px 20px',
+          borderRadius: '10px',
           border: '1px solid #1e293b',
           flexShrink: 0,
         }}
       >
-        {/* Algorithm Selector */}
+        {/* Feature Dropdown */}
         <div>
-          <label htmlFor="algo-select" style={{ marginRight: '10px', fontWeight: 'bold', color: '#94a3b8' }}>
-            Algorithm:
+          <label style={{ marginRight: '6px', fontWeight: 'bold', color: '#94a3b8', fontSize: '13px' }}>
+            Feature:
           </label>
           <select
-            id="algo-select"
-            value={selectedAlgo}
-            onChange={(e) => setSelectedAlgo(e.target.value as AlgorithmOption)}
+            value={selectedFeature}
+            onChange={(e) => handleFeatureChange(e.target.value as Feature)}
             style={{
-              padding: '8px 14px',
+              padding: '6px 12px',
               borderRadius: '6px',
               background: '#0f172a',
               color: '#e2e8f0',
               border: '1px solid #334155',
-              fontSize: '14px',
+              fontSize: '13px',
               cursor: 'pointer',
             }}
           >
-            <option value="bubble">🔵 Bubble Sort</option>
-            <option value="hillClimbing">⛰️ Hill Climbing</option>
+            <option value="sorting">🔵 Sorting</option>
+            <option value="optimization">🧠 Optimization</option>
           </select>
         </div>
 
-        {/* New Array Button (Sorting only) */}
-        {selectedAlgo === 'bubble' && (
-          <button onClick={generateArray} style={{ ...btnStyle, background: '#1e293b', border: '1px solid #334155' }}>
-            🔄 New Array
+        {/* Algorithm Dropdown */}
+        <div>
+          <label style={{ marginRight: '6px', fontWeight: 'bold', color: '#94a3b8', fontSize: '13px' }}>
+            Algorithm:
+          </label>
+          <select
+            value={selectedAlgo}
+            onChange={(e) => setSelectedAlgo(e.target.value)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              background: '#0f172a',
+              color: '#e2e8f0',
+              border: '1px solid #334155',
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            {featureAlgorithms[selectedFeature].map((algo) => (
+              <option key={algo} value={algo}>
+                {algorithmDisplayNames[algo]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Array Size (Sorting only) */}
+        {isSorting && (
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: '#94a3b8' }}>Size:</span>
+            {([25, 50, 100, 200] as ArraySize[]).map((size) => (
+              <button
+                key={size}
+                onClick={() => setArraySize(size)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: arraySize === size ? '#38bdf8' : 'transparent',
+                  color: arraySize === size ? '#0a0e1a' : '#94a3b8',
+                  fontSize: '12px',
+                  fontWeight: arraySize === size ? 'bold' : 'normal',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* New Array (Sorting only) */}
+        {isSorting && (
+          <button
+            onClick={generateArray}
+            style={{ ...btnStyle, background: '#1e293b', border: '1px solid #334155', padding: '6px 14px' }}
+          >
+            🔄 New
           </button>
         )}
 
-        {/* Play/Stop/Resume Button */}
+        {/* Play / Stop / Resume */}
         <button
           onClick={handlePlayButtonClick}
           style={{
             ...btnStyle,
             background: playConfig.bg,
-            minWidth: '100px',
+            minWidth: '90px',
             fontWeight: 'bold',
+            padding: '6px 16px',
           }}
         >
           {playConfig.text}
         </button>
 
-        {/* Step Button */}
+        {/* Step */}
         <button
           onClick={stepForward}
-          style={{ ...btnStyle, background: '#1e293b', border: '1px solid #334155' }}
+          style={{ ...btnStyle, background: '#1e293b', border: '1px solid #334155', padding: '6px 14px' }}
           disabled={playState === 'playing'}
         >
-          ⏭ Step
+          ⏭ Next
         </button>
 
-        {/* Speed Presets */}
-        <div style={{ display: 'flex', gap: '4px', background: '#0f172a', padding: '4px', borderRadius: '8px' }}>
+        {/* Speed */}
+        <div style={{ display: 'flex', gap: '4px', background: '#0f172a', padding: '4px', borderRadius: '6px' }}>
           {(['slow', 'normal', 'fast', 'turbo'] as SpeedOption[]).map((key) => (
             <button
               key={key}
               onClick={() => setSpeed(key)}
               style={{
-                padding: '6px 12px',
-                borderRadius: '6px',
+                padding: '4px 10px',
+                borderRadius: '4px',
                 border: 'none',
                 background: speed === key ? '#38bdf8' : 'transparent',
                 color: speed === key ? '#0a0e1a' : '#94a3b8',
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: speed === key ? 'bold' : 'normal',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
             >
-              {key === 'slow' && '🐢 Slow'}
-              {key === 'normal' && '🚶 Normal'}
-              {key === 'fast' && '🏃 Fast'}
-              {key === 'turbo' && '⚡ Turbo'}
+              {key === 'slow' && '🐢'}
+              {key === 'normal' && '🚶'}
+              {key === 'fast' && '🏃'}
+              {key === 'turbo' && '⚡'}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Main Area: Canvas + Sidebar */}
+      {/* Main Area: Canvas + Sidebar (FIXED, NO SCROLL) */}
       <div
         style={{
           display: 'flex',
@@ -419,15 +556,15 @@ function App() {
           minHeight: 0,
           overflow: 'hidden',
           background: '#141b2d',
-          borderRadius: '12px',
+          borderRadius: '10px',
           border: '1px solid #1e293b',
         }}
       >
-        {/* Canvas Wrapper */}
+        {/* Canvas */}
         <div
           style={{
             flex: 1,
-            padding: '20px',
+            padding: '16px',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
@@ -442,19 +579,19 @@ function App() {
               background: '#1a2340',
               borderRadius: '8px',
               width: '100%',
-              maxWidth: '800px',
-              height: 'auto',
-              aspectRatio: '800 / 400',
+              height: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
             }}
           />
         </div>
 
-        {/* History Log Sidebar - Wrapped to fill height */}
+        {/* History Log Sidebar */}
         <div
           style={{
             height: '100%',
             minHeight: 0,
-            width: '340px',
+            width: '320px',
             flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
@@ -469,56 +606,47 @@ function App() {
         </div>
       </div>
 
-      {/* Metadata / Stats Bar */}
+      {/* Metadata & Legend */}
       <div
         style={{
-          marginTop: '16px',
-          padding: '12px 20px',
+          marginTop: '10px',
+          padding: '8px 16px',
           background: '#141b2d',
           borderRadius: '8px',
           border: '1px solid #1e293b',
-          textAlign: 'center',
-          fontSize: '15px',
-          color: '#94a3b8',
-          fontFamily: 'monospace',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           flexShrink: 0,
+          flexWrap: 'wrap',
+          gap: '8px',
         }}
       >
-        {metadata || 'Select an algorithm and press Play.'}
-      </div>
+        <span style={{ fontSize: '14px', color: '#94a3b8', fontFamily: 'monospace' }}>
+          {metadata || 'Select an algorithm and press Play.'}
+        </span>
 
-      {/* Legend */}
-      {selectedAlgo === 'bubble' && (
-        <div
-          style={{
-            marginTop: '12px',
-            textAlign: 'center',
-            fontSize: '13px',
-            color: '#64748b',
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ color: '#38bdf8' }}>🟦 Unsorted</span>
-          {'  |  '}
-          <span style={{ color: '#facc15' }}>🟨 Comparing</span>
-          {'  |  '}
-          <span style={{ color: '#f87171' }}>🟥 Swapping</span>
-          {'  |  '}
-          <span style={{ color: '#4ade80' }}>🟩 Sorted</span>
-        </div>
-      )}
+        {isSorting && (
+          <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', gap: '12px' }}>
+            <span style={{ color: '#38bdf8' }}>🟦 Unsorted</span>
+            <span style={{ color: '#facc15' }}>🟨 Comparing</span>
+            <span style={{ color: '#f87171' }}>🟥 Swapping</span>
+            <span style={{ color: '#4ade80' }}>🟩 Sorted</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 const btnStyle: React.CSSProperties = {
-  padding: '10px 20px',
+  padding: '6px 14px',
   border: 'none',
   borderRadius: '6px',
   color: 'white',
   fontWeight: '500',
   cursor: 'pointer',
-  fontSize: '15px',
+  fontSize: '13px',
   transition: 'all 0.2s ease',
   background: '#3742fa',
 };

@@ -1,4 +1,4 @@
-// src/features/sorting/renderers/arrayRenderer.ts
+// src/renderers/arrayRenderer.ts
 import type { VisualizationState } from '../core/types';
 
 export function drawArray(canvas: HTMLCanvasElement, state: VisualizationState) {
@@ -6,6 +6,7 @@ export function drawArray(canvas: HTMLCanvasElement, state: VisualizationState) 
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  // Use the canvas's actual pixel dimensions (800x400 by default)
   const width = canvas.width;
   const height = canvas.height;
   const arr = state.data as number[];
@@ -29,55 +30,94 @@ export function drawArray(canvas: HTMLCanvasElement, state: VisualizationState) 
     return;
   }
 
-  const barWidth = width / arr.length;
-  const highlightSet = new Set(state.highlights.indices || []);
-  const padding = 4;
+  // --- DYNAMIC ADJUSTMENTS BASED ON ARRAY SIZE ---
+  const count = arr.length;
+  
+  // 1. Bar width: distribute evenly across the canvas
+  const barWidth = width / count;
+
+  // 2. Padding: shrink gaps as bars get smaller
+  //    - For < 30 bars: 4px gap
+  //    - For 30-60 bars: 2px gap
+  //    - For > 60 bars: 0px gap (bars touch each other)
+  let padding = 4;
+  if (count > 30) padding = 2;
+  if (count > 60) padding = 0;
+
+  // 3. Show text only if bars are wide enough (> 12px)
+  const showLabels = barWidth > 12;
+
+  // 4. Font size: shrink text dynamically, but keep it readable
+  const fontSize = Math.max(8, Math.min(12, barWidth * 0.5));
+
+  // 5. Minimum bar height (so tiny bars are still visible)
+  const minBarHeight = 2;
+
+  // Create sets for quick lookups
+  const comparingSet = new Set(state.highlights.comparingIndices || []);
+  const swappingSet = new Set(state.highlights.swappingIndices || []);
+  const sortedSet = new Set(state.highlights.sortedIndices || []);
 
   arr.forEach((value, index) => {
-    const barHeight = (value / maxVal) * (height - 30);
+    // Calculate bar height (with minimum)
+    const rawHeight = (value / maxVal) * (height - 30);
+    const barHeight = Math.max(minBarHeight, rawHeight);
+
     const x = index * barWidth;
     const y = height - barHeight - 10;
 
-    // Determine color based on state
-    let color = '#38bdf8'; // Unsorted (Cyan)
-    if (highlightSet.has(index)) {
-      // If it's the last element being sorted? Just a guess.
-      // Usually comparing and swapping are different colors.
-      // We'll use yellow for comparing, red for swapping.
-      // Since we don't know which operation, we'll default to yellow for highlights.
-      // To differentiate, we could check metadata, but for now let's use a gradient.
-      color = '#facc15'; // Comparing (Yellow)
-      // If there are exactly two highlighted, they are likely being compared/swapped.
-      // We'll make the second one slightly different if needed, but keep it simple.
+    // Determine color
+    let color = '#38bdf8'; // Unsorted (Blue)
+    let shadowColor = 'rgba(56, 189, 248, 0.2)';
+    let glowIntensity = 5;
+
+    if (swappingSet.has(index)) {
+      color = '#f87171'; // Red
+      shadowColor = 'rgba(248, 113, 113, 0.4)';
+      glowIntensity = 15;
+    } else if (comparingSet.has(index)) {
+      color = '#facc15'; // Yellow
+      shadowColor = 'rgba(250, 204, 21, 0.4)';
+      glowIntensity = 15;
+    } else if (sortedSet.has(index)) {
+      color = '#4ade80'; // Green
+      shadowColor = 'rgba(74, 222, 128, 0.2)';
+      glowIntensity = 5;
     }
 
-    // Check if this bar is part of the sorted suffix (for Bubble Sort, it's the end)
-    // We'll assume sorted if all bars after this are in order? That's complex.
-    // For now, just rely on highlights.
+    // Draw bar with glow
+    ctx.shadowColor = shadowColor;
+    ctx.shadowBlur = glowIntensity;
 
-    // Gradient fill for depth
     const grad = ctx.createLinearGradient(x, y, x + barWidth, y + barHeight);
-    if (highlightSet.has(index)) {
+    if (swappingSet.has(index)) {
+      grad.addColorStop(0, '#f87171');
+      grad.addColorStop(1, '#dc2626');
+    } else if (comparingSet.has(index)) {
       grad.addColorStop(0, '#facc15');
-      grad.addColorStop(1, '#f59e0b');
+      grad.addColorStop(1, '#eab308');
+    } else if (sortedSet.has(index)) {
+      grad.addColorStop(0, '#4ade80');
+      grad.addColorStop(1, '#22c55e');
     } else {
       grad.addColorStop(0, '#38bdf8');
       grad.addColorStop(1, '#0284c7');
     }
 
     ctx.fillStyle = grad;
-    ctx.shadowColor = highlightSet.has(index) ? 'rgba(250, 204, 21, 0.4)' : 'rgba(56, 189, 248, 0.2)';
-    ctx.shadowBlur = highlightSet.has(index) ? 15 : 5;
-    ctx.fillRect(x + padding / 2, y, barWidth - padding, barHeight);
+    ctx.fillRect(x + padding / 2, y, Math.max(1, barWidth - padding), barHeight);
+
+    // Reset shadow for text
     ctx.shadowBlur = 0;
 
-    // Value label
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = `${Math.min(12, barWidth * 0.6)}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    if (barHeight > 20) {
+    // Draw the number label (only if enabled and bar is tall enough to fit the text)
+    if (showLabels) {
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = `${fontSize}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
       ctx.fillText(value.toString(), x + barWidth / 2, y - 4);
     }
   });
+
 }

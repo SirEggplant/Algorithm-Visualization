@@ -5,7 +5,10 @@ export type VisualizationState = {
   type: 'array' | 'scatter' | 'grid' | 'graph' | 'ecosystem';
   data: number[] | Point[] | unknown;
   highlights: {
-    indices?: number[];
+    indices?: number[];                 // For general use
+    comparingIndices?: number[];        // 🟨 Currently comparing
+    swappingIndices?: number[];         // 🟥 Currently swapping
+    sortedIndices?: number[];           // 🟩 Already sorted
     coordinates?: Point[];
   };
   metadata: {
@@ -17,7 +20,7 @@ export type VisualizationState = {
     avgSpeed?: number;
     avgSize?: number;
     currentLine?: number;
-    action?: string; // 👈 NEW: describes the operation (e.g., "Swapped 7 and 3")
+    action?: string;
   };
 };
 

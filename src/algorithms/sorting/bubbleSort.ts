@@ -1,39 +1,43 @@
-// src/features/sorting/algorithms/bubbleSort.ts
+// src/algorithms/sorting/bubbleSort.ts
 import type { VisualizationState, AlgorithmGenerator } from '../../core/types';
 
 export function* bubbleSortGenerator(input: number[]): AlgorithmGenerator {
   const arr = [...input];
   let comparisons = 0;
   let swaps = 0;
-  let step = 0;
+  const sortedIndices: number[] = [];
 
   for (let i = 0; i < arr.length; i++) {
     for (let j = 0; j < arr.length - i - 1; j++) {
-      step++;
       comparisons++;
 
-      // Yield: Comparing
+      // Step 1: Comparing (Yellow)
       yield {
         type: 'array',
         data: arr,
-        highlights: { indices: [j, j + 1] },
+        highlights: {
+          comparingIndices: [j, j + 1],
+          sortedIndices: sortedIndices,
+        },
         metadata: {
           comparisons,
           swaps,
-          action: `Compared ${arr[j]} and ${arr[j + 1]}`,
+          action: `Comparing ${arr[j]} and ${arr[j + 1]}`,
         },
       };
 
       if (arr[j] > arr[j + 1]) {
         swaps++;
-        // Perform the swap
+        // Step 2: Swapping (Red)
         [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
 
-        // Yield: Swapped
         yield {
           type: 'array',
           data: arr,
-          highlights: { indices: [j, j + 1] },
+          highlights: {
+            swappingIndices: [j, j + 1],
+            sortedIndices: sortedIndices,
+          },
           metadata: {
             comparisons,
             swaps,
@@ -42,13 +46,34 @@ export function* bubbleSortGenerator(input: number[]): AlgorithmGenerator {
         };
       }
     }
+
+    // Step 3: Mark the last element as sorted (Green)
+    const sortedIndex = arr.length - 1 - i;
+    if (!sortedIndices.includes(sortedIndex)) {
+      sortedIndices.push(sortedIndex);
+    }
+
+    yield {
+      type: 'array',
+      data: arr,
+      highlights: {
+        sortedIndices: sortedIndices,
+      },
+      metadata: {
+        comparisons,
+        swaps,
+        action: `Sorted element at position ${sortedIndex}`,
+      },
+    };
   }
 
-  // Final state: fully sorted
+  // Final state: fully sorted (All Green)
   yield {
     type: 'array',
     data: arr,
-    highlights: { indices: [] },
+    highlights: {
+      sortedIndices: arr.map((_, i) => i),
+    },
     metadata: {
       comparisons,
       swaps,
