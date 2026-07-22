@@ -6,9 +6,9 @@ import HistoryLog, { type HistoryEntry } from './ui/HistoryLog';
 
 // Sorting Feature
 import { drawArray } from './renderers/arrayRenderer';
-import { bubbleSortGenerator } from './algorithms/sorting/bubbleSort';
-import { mergeSortGenerator } from './algorithms/sorting/mergeSort';
-import { quickSortGenerator } from './algorithms/sorting/quickSort'; 
+import { bubbleSortGenerator, BUBBLE_SORT_INFO } from './algorithms/sorting/bubbleSort';
+import { mergeSortGenerator, MERGE_SORT_INFO } from './algorithms/sorting/mergeSort';
+import { quickSortGenerator, QUICK_SORT_INFO } from './algorithms/sorting/quickSort';
 
 // Hill Climbing Feature
 import { drawScatter, disposeScatterRenderer } from './renderers/scatterRenderer';
@@ -17,7 +17,6 @@ import { hillClimbingGenerator } from './algorithms/hillClimbing/peakFinder';
 // --- Types ---
 type Feature = 'sorting' | 'optimization';
 type SortingAlgo = 'bubble' | 'merge' | 'quick';
-type OptimizationAlgo = 'hillClimbing';
 type PlayState = 'idle' | 'playing' | 'paused';
 type SpeedOption = 'slow' | 'normal' | 'fast' | 'turbo';
 type ArraySize = 25 | 50 | 100 | 200;
@@ -38,9 +37,17 @@ const featureAlgorithms: Record<Feature, string[]> = {
 // Display names
 const algorithmDisplayNames: Record<string, string> = {
   bubble: 'Bubble Sort',
-  merge : 'Merge Sort',
-  quick: 'Quick Sort' ,
+  merge: 'Merge Sort',
+  quick: 'Quick Sort',
   hillClimbing: '⛰️ Hill Climbing',
+};
+
+// Registry mapping algorithm IDs to their info objects
+const algorithmInfoMap: Record<string, any> = {
+  bubble: BUBBLE_SORT_INFO,
+  merge: MERGE_SORT_INFO,
+  quick: QUICK_SORT_INFO,
+  // hillClimbing: HILL_CLIMBING_INFO (to be added later)
 };
 
 function App() {
@@ -56,6 +63,9 @@ function App() {
   const [playState, setPlayState] = useState<PlayState>('idle');
   const [speed, setSpeed] = useState<SpeedOption>('normal');
   const [metadata, setMetadata] = useState<string>('');
+
+  // Details popup state
+  const [showDetails, setShowDetails] = useState<boolean>(false);
 
   // History state
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -77,7 +87,6 @@ function App() {
       }
     }
 
-    // Build metadata string
     let metaText = '';
     const m = state.metadata;
     if (m.comparisons !== undefined) {
@@ -101,22 +110,21 @@ function App() {
     }
 
     let generator;
-  if (selectedFeature === 'sorting' && selectedAlgo === 'bubble') {
-    if (array.length === 0) return;
-    generator = bubbleSortGenerator(array);
-  } else if (selectedFeature === 'sorting' && selectedAlgo === 'merge') {
-    if (array.length === 0) return;
-    generator = mergeSortGenerator(array);
-  } else if (selectedFeature === 'sorting' && selectedAlgo === 'quick') {
-    if (array.length === 0) return;
-    generator = quickSortGenerator(array);
-  } else if (selectedFeature === 'optimization' && selectedAlgo === 'hillClimbing') {
-    generator = hillClimbingGenerator();
-  } else {
-    return;
-  }
+    if (selectedFeature === 'sorting' && selectedAlgo === 'bubble') {
+      if (array.length === 0) return;
+      generator = bubbleSortGenerator(array);
+    } else if (selectedFeature === 'sorting' && selectedAlgo === 'merge') {
+      if (array.length === 0) return;
+      generator = mergeSortGenerator(array);
+    } else if (selectedFeature === 'sorting' && selectedAlgo === 'quick') {
+      if (array.length === 0) return;
+      generator = quickSortGenerator(array);
+    } else if (selectedFeature === 'optimization' && selectedAlgo === 'hillClimbing') {
+      generator = hillClimbingGenerator();
+    } else {
+      return;
+    }
 
-    // Reset history when starting fresh
     setHistory([]);
     setCurrentHistoryIndex(-1);
 
@@ -195,74 +203,67 @@ function App() {
     setMetadata('Ready to sort!');
   }, [selectedFeature, arraySize]);
 
-// --- Updated "Next" Button Logic ---
-const stepForward = useCallback(() => {
-  // 1. If playing, pause first
-  if (playState === 'playing') {
-    engineRef.current.pause();
-    if (replayIntervalRef.current) {
-      clearInterval(replayIntervalRef.current);
-      replayIntervalRef.current = null;
-    }
-    setPlayState('paused');
-  }
-
-  // 2. Check if we are browsing PAST history (i.e., currentIndex < history.length - 1)
-  if (history.length > 0 && currentHistoryIndex < history.length - 1) {
-    // Navigate to the next step in the stored history
-    const nextIndex = currentHistoryIndex + 1;
-    const nextEntry = history[nextIndex];
-    if (nextEntry) {
-      updateUIWithState(nextEntry.state);
-      setCurrentHistoryIndex(nextIndex);
-      // Ensure the engine stays paused
+  const stepForward = useCallback(() => {
+    if (playState === 'playing') {
       engineRef.current.pause();
+      if (replayIntervalRef.current) {
+        clearInterval(replayIntervalRef.current);
+        replayIntervalRef.current = null;
+      }
       setPlayState('paused');
-      return;
-    }
-  }
-
-  // 3. If we reached here, we are at the LATEST step. 
-  //    We need to generate a NEW step from the engine.
-  if (selectedFeature === 'sorting' && array.length === 0) return;
-
-  // Check if the engine has a generator loaded. If not, load one.
-  if (!engineRef.current['generator']) {
-    let generator;
-    if (selectedFeature === 'sorting' && selectedAlgo === 'bubble') {
-      if (array.length === 0) return;
-      generator = bubbleSortGenerator(array);
-    } else if (selectedFeature === 'optimization' && selectedAlgo === 'hillClimbing') {
-      generator = hillClimbingGenerator();
-    } else {
-      return;
     }
 
-    // Set up the engine with the generator and the update callback
-    engineRef.current.load(generator);
-    engineRef.current.onUpdate = (state: VisualizationState) => {
-      updateUIWithState(state);
-      // Push the new state to history
-      setHistory((prev) => {
-        const newEntry: HistoryEntry = {
-          step: prev.length + 1,
-          action: state.metadata.action || `Step ${prev.length + 1}`,
-          state: JSON.parse(JSON.stringify(state)),
-        };
-        return [...prev, newEntry];
-      });
-      setCurrentHistoryIndex((prev) => prev + 1);
-    };
-  }
+    if (history.length > 0 && currentHistoryIndex < history.length - 1) {
+      const nextIndex = currentHistoryIndex + 1;
+      const nextEntry = history[nextIndex];
+      if (nextEntry) {
+        updateUIWithState(nextEntry.state);
+        setCurrentHistoryIndex(nextIndex);
+        engineRef.current.pause();
+        setPlayState('paused');
+        return;
+      }
+    }
 
-  // 4. Perform a single step from the engine
-  engineRef.current.pause(); // Ensure paused
-  setPlayState('paused');
-  engineRef.current.step();
+    if (selectedFeature === 'sorting' && array.length === 0) return;
 
-}, [currentHistoryIndex, history, playState, selectedFeature, selectedAlgo, array, updateUIWithState]);
+    if (!engineRef.current['generator']) {
+      let generator;
+      if (selectedFeature === 'sorting' && selectedAlgo === 'bubble') {
+        if (array.length === 0) return;
+        generator = bubbleSortGenerator(array);
+      } else if (selectedFeature === 'sorting' && selectedAlgo === 'merge') {
+        if (array.length === 0) return;
+        generator = mergeSortGenerator(array);
+      } else if (selectedFeature === 'sorting' && selectedAlgo === 'quick') {
+        if (array.length === 0) return;
+        generator = quickSortGenerator(array);
+      } else if (selectedFeature === 'optimization' && selectedAlgo === 'hillClimbing') {
+        generator = hillClimbingGenerator();
+      } else {
+        return;
+      }
 
-  // --- Revert to History Step ---
+      engineRef.current.load(generator);
+      engineRef.current.onUpdate = (state: VisualizationState) => {
+        updateUIWithState(state);
+        setHistory((prev) => {
+          const newEntry: HistoryEntry = {
+            step: prev.length + 1,
+            action: state.metadata.action || `Step ${prev.length + 1}`,
+            state: JSON.parse(JSON.stringify(state)),
+          };
+          return [...prev, newEntry];
+        });
+        setCurrentHistoryIndex((prev) => prev + 1);
+      };
+    }
+
+    engineRef.current.pause();
+    setPlayState('paused');
+    engineRef.current.step();
+  }, [currentHistoryIndex, history, playState, selectedFeature, selectedAlgo, array, updateUIWithState]);
+
   const revertToStep = useCallback(
     (targetIndex: number) => {
       if (targetIndex < 0 || targetIndex >= history.length) return;
@@ -304,7 +305,7 @@ const stepForward = useCallback(() => {
     [history, currentHistoryIndex, playState, updateUIWithState]
   );
 
-  // --- Speed change ---
+  // Speed change handler
   useEffect(() => {
     if (playState === 'playing') {
       engineRef.current.pause();
@@ -312,7 +313,7 @@ const stepForward = useCallback(() => {
     }
   }, [speed, playState]);
 
-  // --- Initialize ---
+  // Initialize
   useEffect(() => {
     generateArray();
     return () => {
@@ -327,7 +328,7 @@ const stepForward = useCallback(() => {
     };
   }, [generateArray]);
 
-  // --- Handle Feature / Algorithm switching ---
+  // Handle Feature / Algorithm switching
   useEffect(() => {
     engineRef.current.pause();
     if (replayIntervalRef.current) {
@@ -337,8 +338,8 @@ const stepForward = useCallback(() => {
     setPlayState('idle');
     setHistory([]);
     setCurrentHistoryIndex(-1);
+    setShowDetails(false);
 
-    // Dispose 3D renderer if leaving optimization
     if (prevFeatureRef.current === 'optimization' && selectedFeature !== 'optimization') {
       if (canvasRef.current) {
         disposeScatterRenderer(canvasRef.current);
@@ -368,14 +369,15 @@ const stepForward = useCallback(() => {
     }
   }, [selectedFeature, selectedAlgo, generateArray]);
 
-  // --- Handle feature change -> reset algorithm to first in list ---
+  // Handle feature change -> reset algorithm to first in list
   const handleFeatureChange = (feature: Feature) => {
     setSelectedFeature(feature);
     const firstAlgo = featureAlgorithms[feature][0];
     setSelectedAlgo(firstAlgo);
+    setShowDetails(false);
   };
 
-  // --- Play button config ---
+  // Play button config
   const getPlayButtonConfig = () => {
     if (playState === 'idle') return { text: '▶ Play', bg: '#2ed573' };
     if (playState === 'playing') return { text: '⏹ Stop', bg: '#ff4757' };
@@ -383,8 +385,8 @@ const stepForward = useCallback(() => {
   };
   const playConfig = getPlayButtonConfig();
 
-  // --- Determine if sorting is active (for array-specific controls) ---
   const isSorting = selectedFeature === 'sorting';
+  const currentAlgoInfo = algorithmInfoMap[selectedAlgo];
 
   return (
     <div
@@ -422,7 +424,7 @@ const stepForward = useCallback(() => {
           flexShrink: 0,
         }}
       >
-        {/* Feature Dropdown */}
+        {/* 1. Feature Dropdown */}
         <div>
           <label style={{ marginRight: '6px', fontWeight: 'bold', color: '#94a3b8', fontSize: '13px' }}>
             Feature:
@@ -439,39 +441,48 @@ const stepForward = useCallback(() => {
               fontSize: '13px',
               cursor: 'pointer',
             }}
+            disabled={playState === 'playing'}
           >
             <option value="sorting">🔵 Sorting</option>
             <option value="optimization">🧠 Optimization</option>
           </select>
         </div>
 
-        {/* Algorithm Dropdown */}
-        <div>
-          <label style={{ marginRight: '6px', fontWeight: 'bold', color: '#94a3b8', fontSize: '13px' }}>
-            Algorithm:
-          </label>
-          <select
-            value={selectedAlgo}
-            onChange={(e) => setSelectedAlgo(e.target.value)}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '6px',
-              background: '#0f172a',
-              color: '#e2e8f0',
-              border: '1px solid #334155',
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
+        {/* 2. New Array (Sorting only) */}
+        {isSorting && (
+          <button
+            onClick={generateArray}
+            style={{ ...btnStyle, background: '#1e293b', border: '1px solid #334155', padding: '6px 14px' }}
+            disabled={playState === 'playing'}
           >
-            {featureAlgorithms[selectedFeature].map((algo) => (
-              <option key={algo} value={algo}>
-                {algorithmDisplayNames[algo]}
-              </option>
-            ))}
-          </select>
-        </div>
+            🔄 New
+          </button>
+        )}
 
-        {/* Array Size (Sorting only) */}
+        {/* 3. Play / Stop / Resume */}
+        <button
+          onClick={handlePlayButtonClick}
+          style={{
+            ...btnStyle,
+            background: playConfig.bg,
+            minWidth: '90px',
+            fontWeight: 'bold',
+            padding: '6px 16px',
+          }}
+        >
+          {playConfig.text}
+        </button>
+
+        {/* 4. Next (Unsplit only) */}
+        <button
+          onClick={stepForward}
+          style={{ ...btnStyle, background: '#1e293b', border: '1px solid #334155', padding: '6px 14px' }}
+          disabled={playState === 'playing'}
+        >
+          ⏭ Next
+        </button>
+
+        {/* 5. Array Size (Sorting only) */}
         {isSorting && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>Size:</span>
@@ -489,7 +500,9 @@ const stepForward = useCallback(() => {
                   fontWeight: arraySize === size ? 'bold' : 'normal',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
+                  opacity: playState === 'playing' ? 0.5 : 1,
                 }}
+                disabled={playState === 'playing'}
               >
                 {size}
               </button>
@@ -497,40 +510,7 @@ const stepForward = useCallback(() => {
           </div>
         )}
 
-        {/* New Array (Sorting only) */}
-        {isSorting && (
-          <button
-            onClick={generateArray}
-            style={{ ...btnStyle, background: '#1e293b', border: '1px solid #334155', padding: '6px 14px' }}
-          >
-            🔄 New
-          </button>
-        )}
-
-        {/* Play / Stop / Resume */}
-        <button
-          onClick={handlePlayButtonClick}
-          style={{
-            ...btnStyle,
-            background: playConfig.bg,
-            minWidth: '90px',
-            fontWeight: 'bold',
-            padding: '6px 16px',
-          }}
-        >
-          {playConfig.text}
-        </button>
-
-        {/* Step */}
-        <button
-          onClick={stepForward}
-          style={{ ...btnStyle, background: '#1e293b', border: '1px solid #334155', padding: '6px 14px' }}
-          disabled={playState === 'playing'}
-        >
-          ⏭ Next
-        </button>
-
-        {/* Speed */}
+        {/* 6. Speed */}
         <div style={{ display: 'flex', gap: '4px', background: '#0f172a', padding: '4px', borderRadius: '6px' }}>
           {(['slow', 'normal', 'fast', 'turbo'] as SpeedOption[]).map((key) => (
             <button
@@ -555,9 +535,19 @@ const stepForward = useCallback(() => {
             </button>
           ))}
         </div>
+
+        {/* Color Legend */}
+        {isSorting && (
+          <div style={{ display: 'flex', gap: '8px', fontSize: '11px', color: '#64748b', marginLeft: '4px' }}>
+            <span style={{ color: '#38bdf8' }}>🟦 Unsorted</span>
+            <span style={{ color: '#facc15' }}>🟨 Comparing</span>
+            <span style={{ color: '#f87171' }}>🟥 Swapping</span>
+            <span style={{ color: '#4ade80' }}>🟩 Sorted</span>
+          </div>
+        )}
       </div>
 
-      {/* Main Area: Canvas + Sidebar (FIXED, NO SCROLL) */}
+      {/* Main Area: Canvas + History */}
       <div
         style={{
           display: 'flex',
@@ -570,7 +560,7 @@ const stepForward = useCallback(() => {
           border: '1px solid #1e293b',
         }}
       >
-        {/* Canvas */}
+        {/* Canvas Wrapper */}
         <div
           style={{
             flex: 1,
@@ -581,19 +571,176 @@ const stepForward = useCallback(() => {
             minHeight: 0,
           }}
         >
-          <canvas
-            ref={canvasRef}
-            width={800}
-            height={400}
-            style={{
-              background: '#1a2340',
-              borderRadius: '8px',
-              width: '100%',
-              height: '100%',
-              maxHeight: '100%',
-              objectFit: 'contain',
-            }}
-          />
+          {/* Relative container for absolute overlay */}
+          <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <canvas
+              ref={canvasRef}
+              width={800}
+              height={400}
+              style={{
+                background: '#1a2340',
+                borderRadius: '8px',
+                width: '100%',
+                height: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain',
+              }}
+            />
+
+            {/* Top-Left Overlay */}
+            <div
+              style={{
+                position: 'absolute',
+                top: '12px',
+                left: '12px',
+                zIndex: 10,
+                pointerEvents: 'none',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  gap: '6px',
+                  background: 'rgba(10, 14, 26, 0.85)',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  backdropFilter: 'blur(4px)',
+                  border: '1px solid #1e293b',
+                  pointerEvents: 'auto',
+                  minWidth: '200px',
+                }}
+              >
+                {/* Row 1: Algorithm Selector + Details Button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  {isSorting && (
+                    <>
+                      <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 'bold' }}>
+                        Algorithm:
+                      </span>
+                      <select
+                        value={selectedAlgo}
+                        onChange={(e) => {
+                          setSelectedAlgo(e.target.value);
+                          setShowDetails(false);
+                        }}
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background: '#0f172a',
+                          color: '#e2e8f0',
+                          border: '1px solid #334155',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          opacity: playState === 'playing' ? 0.6 : 1,
+                        }}
+                        disabled={playState === 'playing'}
+                      >
+                        {featureAlgorithms[selectedFeature].map((algo) => (
+                          <option key={algo} value={algo}>
+                            {algorithmDisplayNames[algo]}
+                          </option>
+                        ))}
+                      </select>
+                      {/* Details Button */}
+                      <button
+                        onClick={() => setShowDetails(!showDetails)}
+                        style={{
+                          background: showDetails ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                          border: '1px solid #475569',
+                          borderRadius: '4px',
+                          color: showDetails ? '#38bdf8' : '#94a3b8',
+                          padding: '2px 8px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          lineHeight: '1.4',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#38bdf8')}
+                        onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#475569')}
+                      >
+                        📖 Details
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* Row 2: Metadata */}
+                <div
+                  style={{
+                    fontSize: '12px',
+                    color: '#94a3b8',
+                    fontFamily: 'monospace',
+                    whiteSpace: 'nowrap',
+                    maxWidth: '100%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {metadata || (isSorting ? 'Press Play to start sorting' : 'Press Play to start searching')}
+                </div>
+
+                {/* Details Popup */}
+                {showDetails && currentAlgoInfo && (
+                  <div
+                    style={{
+                      position: 'relative',
+                      marginTop: '4px',
+                      padding: '10px 12px',
+                      background: '#0f172a',
+                      border: '1px solid #334155',
+                      borderRadius: '6px',
+                      width: '280px',
+                      maxWidth: '280px',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.8)',
+                      pointerEvents: 'auto',
+                    }}
+                  >
+                    <button
+                      onClick={() => setShowDetails(false)}
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        right: '6px',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        lineHeight: '1',
+                      }}
+                    >
+                      ✕
+                    </button>
+                    <h4 style={{ margin: '0 0 8px 0', color: '#e2e8f0', fontSize: '21px' }}>
+                      {currentAlgoInfo.name}
+                    </h4>
+                    <p style={{ margin: '0 0 12px 0', fontSize: '18px', color: '#94a3b8', lineHeight: '1.5' }}>
+                      {currentAlgoInfo.description}
+                    </p>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '12px',
+                        fontSize: '15px',
+                        color: '#64748b',
+                        borderTop: '1px solid #1e293b',
+                        paddingTop: '8px',
+                        marginTop: '4px',
+                      }}
+                    >
+                      <span>⚡ Best: {currentAlgoInfo.bestCase}</span>
+                      <span>📊 Avg: {currentAlgoInfo.avgCase}</span>
+                      <span>🐌 Worst: {currentAlgoInfo.worstCase}</span>
+                      <span>💾 Space: {currentAlgoInfo.spaceComplexity}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* History Log Sidebar */}
@@ -614,36 +761,6 @@ const stepForward = useCallback(() => {
             isPlaying={playState === 'playing'}
           />
         </div>
-      </div>
-
-      {/* Metadata & Legend */}
-      <div
-        style={{
-          marginTop: '10px',
-          padding: '8px 16px',
-          background: '#141b2d',
-          borderRadius: '8px',
-          border: '1px solid #1e293b',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexShrink: 0,
-          flexWrap: 'wrap',
-          gap: '8px',
-        }}
-      >
-        <span style={{ fontSize: '14px', color: '#94a3b8', fontFamily: 'monospace' }}>
-          {metadata || 'Select an algorithm and press Play.'}
-        </span>
-
-        {isSorting && (
-          <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', gap: '12px' }}>
-            <span style={{ color: '#38bdf8' }}>🟦 Unsorted</span>
-            <span style={{ color: '#facc15' }}>🟨 Comparing</span>
-            <span style={{ color: '#f87171' }}>🟥 Swapping</span>
-            <span style={{ color: '#4ade80' }}>🟩 Sorted</span>
-          </div>
-        )}
       </div>
     </div>
   );

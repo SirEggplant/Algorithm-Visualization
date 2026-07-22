@@ -1,6 +1,15 @@
 // src/algorithms/sorting/mergeSort.ts
 import type { VisualizationState, AlgorithmGenerator } from '../../core/types';
 
+export const MERGE_SORT_INFO = {
+  name: 'Merge Sort',
+  description: 'A divide-and-conquer algorithm that divides the array into halves, recursively sorts each half, and then merges the sorted halves back together. It guarantees O(n log n) performance and is stable.',
+  bestCase: 'O(n log n)',
+  avgCase: 'O(n log n)',
+  worstCase: 'O(n log n)',
+  spaceComplexity: 'O(n)',
+};
+
 // Helper generator to merge two sorted halves
 // NOTE: We DO NOT pass sortedIndices here – during merge,
 // elements should appear as UNSORTED (blue) until the whole segment is merged.

@@ -1,6 +1,15 @@
 // src/algorithms/sorting/quickSort.ts
 import type { VisualizationState, AlgorithmGenerator } from '../../core/types';
 
+export const QUICK_SORT_INFO = {
+  name: 'Quick Sort',
+  description: 'A divide-and-conquer algorithm that selects a "pivot" element, partitions the array so that elements smaller than the pivot come before it and larger come after, and then recursively sorts the sub-arrays. It is highly efficient in practice.',
+  bestCase: 'O(n log n)',
+  avgCase: 'O(n log n)',
+  worstCase: 'O(n²)',
+  spaceComplexity: 'O(log n)',
+};
+
 // Partition function: places pivot in its correct position
 // Returns the final index of the pivot
 function* partition(

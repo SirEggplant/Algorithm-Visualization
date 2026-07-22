@@ -1,6 +1,15 @@
 // src/algorithms/sorting/bubbleSort.ts
 import type { VisualizationState, AlgorithmGenerator } from '../../core/types';
 
+export const BUBBLE_SORT_INFO = {
+  name: 'Bubble Sort',
+  description: 'Repeatedly steps through the list, compares adjacent elements, and swaps them if they are in the wrong order. The process repeats until no swaps are needed, meaning the list is sorted. It is known for its simplicity but is inefficient for large lists.',
+  bestCase: 'O(n)',
+  avgCase: 'O(n²)',
+  worstCase: 'O(n²)',
+  spaceComplexity: 'O(1)',
+};
+
 export function* bubbleSortGenerator(input: number[]): AlgorithmGenerator {
   const arr = [...input];
   let comparisons = 0;
