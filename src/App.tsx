@@ -4,19 +4,21 @@ import { VisualizerEngine } from './core/engine';
 import type { VisualizationState } from './core/types';
 import HistoryLog, { type HistoryEntry } from './ui/HistoryLog';
 
-// Sorting Feature
+// ─── Renderers ───
 import { drawArray } from './renderers/arrayRenderer';
-import { bubbleSortGenerator, BUBBLE_SORT_INFO } from './algorithms/sorting/bubbleSort';
-import { mergeSortGenerator, MERGE_SORT_INFO } from './algorithms/sorting/mergeSort';
-import { quickSortGenerator, QUICK_SORT_INFO } from './algorithms/sorting/quickSort';
-
-// Hill Climbing Feature
 import { drawScatter, disposeScatterRenderer } from './renderers/scatterRenderer';
-import { hillClimbingGenerator } from './algorithms/hillClimbing/peakFinder';
+
+// ─── Registry ───
+import {
+  getAlgorithmIds,
+  getDisplayName,
+  getInfo,
+  getGenerator,
+  getDefaultAlgorithm,
+  type Feature,
+} from './algorithms/registry';
 
 // --- Types ---
-type Feature = 'sorting' | 'optimization';
-type SortingAlgo = 'bubble' | 'merge' | 'quick';
 type PlayState = 'idle' | 'playing' | 'paused';
 type SpeedOption = 'slow' | 'normal' | 'fast' | 'turbo';
 type ArraySize = 25 | 50 | 100 | 200;
@@ -28,22 +30,10 @@ const SPEED_MAP: Record<SpeedOption, number> = {
   turbo: 5,
 };
 
-const featureAlgorithms: Record<Feature, string[]> = {
-  sorting: ['bubble', 'merge', 'quick'],
-  optimization: ['hillClimbing'],
-};
-
-const algorithmDisplayNames: Record<string, string> = {
-  bubble: 'Bubble Sort',
-  merge: 'Merge Sort',
-  quick: 'Quick Sort',
-  hillClimbing: '⛰️ Hill Climbing',
-};
-
-const algorithmInfoMap: Record<string, any> = {
-  bubble: BUBBLE_SORT_INFO,
-  merge: MERGE_SORT_INFO,
-  quick: QUICK_SORT_INFO,
+const features: Feature[] = ['sorting', 'optimization'];
+const featureDisplayNames: Record<Feature, string> = {
+  sorting: '🔵 Sorting',
+  optimization: '🧠 Optimization',
 };
 
 function App() {
@@ -58,8 +48,8 @@ function App() {
   const [array, setArray] = useState<number[]>([]);
   const [arraySize, setArraySize] = useState<ArraySize>(50);
   const [selectedFeature, setSelectedFeature] = useState<Feature>('sorting');
-  const [leftAlgo, setLeftAlgo] = useState<SortingAlgo>('bubble');
-  const [rightAlgo, setRightAlgo] = useState<SortingAlgo>('merge');
+  const [leftAlgo, setLeftAlgo] = useState<string>(getDefaultAlgorithm('sorting'));
+  const [rightAlgo, setRightAlgo] = useState<string>(getDefaultAlgorithm('sorting'));
   const [isSplit, setIsSplit] = useState(false);
   const [playState, setPlayState] = useState<PlayState>('idle');
   const [speed, setSpeed] = useState<SpeedOption>('normal');
@@ -86,6 +76,8 @@ function App() {
 
   const prevFeatureRef = useRef<Feature>(selectedFeature);
   const prevAlgoRef = useRef<string>(leftAlgo);
+  const isFirstRunRef = useRef(true);
+  const isSizeChangeRef = useRef(true); // For size change detection
 
   // --- Core Functions ---
 
@@ -111,13 +103,6 @@ function App() {
     }
     setMetadata(metaText);
   }, []);
-
-  const getGenerator = (algo: string, data: number[]) => {
-    if (algo === 'bubble') return bubbleSortGenerator(data);
-    if (algo === 'merge') return mergeSortGenerator(data);
-    if (algo === 'quick') return quickSortGenerator(data);
-    return null;
-  };
 
   // ─── Draw the current array on both canvases ───
   const drawCurrentArray = useCallback(() => {
@@ -162,7 +147,6 @@ function App() {
       replayIntervalRef.current = null;
     }
 
-    // Draw after state update (use requestAnimationFrame to ensure canvas is ready)
     requestAnimationFrame(() => {
       const state: VisualizationState = {
         type: 'array',
@@ -207,8 +191,8 @@ function App() {
 
     if (isSplit) {
       // ─── SPLIT MODE ───
-      const leftGen = getGenerator(leftAlgo, array);
-      const rightGen = getGenerator(rightAlgo, array);
+      const leftGen = getGenerator(selectedFeature, leftAlgo, array);
+      const rightGen = getGenerator(selectedFeature, rightAlgo, array);
       if (!leftGen || !rightGen) return;
 
       leftEngineRef.current.load(leftGen);
@@ -220,7 +204,7 @@ function App() {
           leftFinished.current = true;
           checkBothFinished();
         }
-        setMetadata(`Left: ${leftAlgo} | Steps: ${leftStepCount.current}`);
+        setMetadata(`Left: ${getDisplayName(selectedFeature, leftAlgo)} | Steps: ${leftStepCount.current}`);
       };
 
       rightEngineRef.current.load(rightGen);
@@ -232,7 +216,7 @@ function App() {
           rightFinished.current = true;
           checkBothFinished();
         }
-        setMetadata(`Right: ${rightAlgo} | Steps: ${rightStepCount.current}`);
+        setMetadata(`Right: ${getDisplayName(selectedFeature, rightAlgo)} | Steps: ${rightStepCount.current}`);
       };
 
       setPlayState('playing');
@@ -240,7 +224,7 @@ function App() {
       rightEngineRef.current.play(SPEED_MAP[speed]);
     } else {
       // ─── UNSPLIT MODE ───
-      const gen = getGenerator(leftAlgo, array);
+      const gen = getGenerator(selectedFeature, leftAlgo, array);
       if (!gen) return;
 
       leftEngineRef.current.load(gen);
@@ -269,7 +253,7 @@ function App() {
       setPlayState('playing');
       leftEngineRef.current.play(SPEED_MAP[speed]);
     }
-  }, [array, leftAlgo, rightAlgo, isSplit, speed, generateArray, updateMetadata]);
+  }, [array, selectedFeature, leftAlgo, rightAlgo, isSplit, speed, generateArray, updateMetadata]);
 
   // ─── Pause ───
   const pauseAlgorithm = useCallback(() => {
@@ -313,28 +297,40 @@ function App() {
       setPlayState('paused');
     }
 
+    // 1. If we have history and we're not at the end, replay the next step from history
     if (history.length > 0 && currentHistoryIndex < history.length - 1) {
       const nextIndex = currentHistoryIndex + 1;
       const nextEntry = history[nextIndex];
       if (nextEntry) {
         updateUIWithState(nextEntry.state, leftCanvasRef.current);
         setCurrentHistoryIndex(nextIndex);
+        // ✅ Update the step counter to match the replayed step
+        leftStepCount.current = nextEntry.step;
         leftEngineRef.current.pause();
         setPlayState('paused');
         return;
       }
     }
 
+    // 2. If we're at the latest step, generate a new step from the engine
     if (selectedFeature === 'sorting' && array.length === 0) return;
 
+    // If no generator is loaded, create one
     if (!leftEngineRef.current['generator']) {
-      const gen = getGenerator(leftAlgo, array);
+      const gen = getGenerator(selectedFeature, leftAlgo, array);
       if (!gen) return;
+
+      // Reset counter for a fresh start
+      leftStepCount.current = 0;
 
       leftEngineRef.current.load(gen);
       leftEngineRef.current.onUpdate = (state: VisualizationState) => {
+        // Draw and update metadata
         if (leftCanvasRef.current) drawArray(leftCanvasRef.current, state);
         updateMetadata(state);
+        // Increment step counter
+        leftStepCount.current += 1;
+        // Push to history
         setHistory((prev) => {
           const newEntry: HistoryEntry = {
             step: prev.length + 1,
@@ -347,6 +343,7 @@ function App() {
       };
     }
 
+    // Perform one step
     leftEngineRef.current.pause();
     setPlayState('paused');
     leftEngineRef.current.step();
@@ -407,34 +404,36 @@ function App() {
     setShowLeftDetails(false);
     setShowRightDetails(false);
 
+    // ─── Reset all step counters and flags ───
+    leftStepCount.current = 0;
+    rightStepCount.current = 0;
+    leftTotalSteps.current = 0;
+    rightTotalSteps.current = 0;
+    leftFinished.current = false;
+    rightFinished.current = false;
+    setHistory([]);
+    setCurrentHistoryIndex(-1);
+    setMetadata('');
+
     const newSplitState = !isSplit;
     setIsSplit(newSplitState);
 
-    // Reset step counters when entering split mode
-    if (newSplitState) {
-      // Reset step counters
-      leftStepCount.current = 0;
-      rightStepCount.current = 0;
-      leftTotalSteps.current = 0;
-      rightTotalSteps.current = 0;
-      leftFinished.current = false;
-      rightFinished.current = false;
-      setMetadata('Ready to sort!');
-      // Redraw the current array on both canvases
-      requestAnimationFrame(() => {
-        drawCurrentArray();
-      });
-    } else {
-      // If unsplitting, reset the array and counters
-      leftStepCount.current = 0;
-      rightStepCount.current = 0;
-      leftTotalSteps.current = 0;
-      rightTotalSteps.current = 0;
-      leftFinished.current = false;
-      rightFinished.current = false;
-      generateArray();
+    // ─── Clear the engine generators so Play starts fresh ───
+    leftEngineRef.current['generator'] = null;
+    rightEngineRef.current['generator'] = null;
+
+    // ─── Redraw the current array on both canvases ───
+    if (array.length > 0) {
+      const state: VisualizationState = {
+        type: 'array',
+        data: array,
+        highlights: {},
+        metadata: { action: 'Ready to sort!' },
+      };
+      if (leftCanvasRef.current) drawArray(leftCanvasRef.current, state);
+      if (rightCanvasRef.current) drawArray(rightCanvasRef.current, state);
     }
-  }, [isSplit, generateArray, drawCurrentArray]);
+  }, [isSplit, array]);
 
   // ─── Speed change handler ───
   useEffect(() => {
@@ -455,15 +454,69 @@ function App() {
       highlights: {},
       metadata: { action: 'Ready to sort!' },
     };
-    // Draw on left canvas (always visible)
     if (leftCanvasRef.current) {
       drawArray(leftCanvasRef.current, state);
     }
-    // Draw on right canvas only if split mode is active
     if (isSplit && rightCanvasRef.current) {
       drawArray(rightCanvasRef.current, state);
     }
   }, [array, isSplit]);
+
+  // ─── Reset when algorithm changes (except on initial mount) ───
+  useEffect(() => {
+    if (selectedFeature !== 'sorting') return;
+    if (isFirstRunRef.current) {
+      isFirstRunRef.current = false;
+      return;
+    }
+
+    // Pause everything
+    leftEngineRef.current.pause();
+    rightEngineRef.current.pause();
+    if (replayIntervalRef.current) {
+      clearInterval(replayIntervalRef.current);
+      replayIntervalRef.current = null;
+    }
+
+    // Reset counters and state
+    setPlayState('idle');
+    leftStepCount.current = 0;
+    rightStepCount.current = 0;
+    leftTotalSteps.current = 0;
+    rightTotalSteps.current = 0;
+    leftFinished.current = false;
+    rightFinished.current = false;
+    setHistory([]);
+    setCurrentHistoryIndex(-1);
+    setMetadata('');
+
+    // Clear engine generators so Play starts fresh
+    leftEngineRef.current['generator'] = null;
+    rightEngineRef.current['generator'] = null;
+
+    // Redraw the current array (keeping the same unsorted array)
+    if (array.length > 0) {
+      const state: VisualizationState = {
+        type: 'array',
+        data: array,
+        highlights: {},
+        metadata: { action: 'Ready to sort!' },
+      };
+      if (leftCanvasRef.current) drawArray(leftCanvasRef.current, state);
+      if (isSplit && rightCanvasRef.current) drawArray(rightCanvasRef.current, state);
+    }
+  }, [leftAlgo, rightAlgo, selectedFeature, isSplit, array]);
+
+  // ─── Regenerate array when size changes (except on initial mount) ───
+  useEffect(() => {
+    if (selectedFeature !== 'sorting') return;
+    if (isSizeChangeRef.current) {
+      isSizeChangeRef.current = false;
+      return;
+    }
+    // Generate a new array with the new size
+    generateArray();
+  }, [arraySize, selectedFeature, generateArray]);
 
   // ─── Initialize ───
   useEffect(() => {
@@ -480,7 +533,7 @@ function App() {
     };
   }, []);
 
-  // ─── Handle Feature / Algorithm switching ───
+  // ─── Handle Feature / Algorithm switching (feature changes only) ───
   useEffect(() => {
     leftEngineRef.current.pause();
     rightEngineRef.current.pause();
@@ -495,16 +548,14 @@ function App() {
     setShowLeftDetails(false);
     setShowRightDetails(false);
 
+    // Dispose 3D renderer when leaving optimization
     if (prevFeatureRef.current === 'optimization' && selectedFeature !== 'optimization') {
       if (leftCanvasRef.current) disposeScatterRenderer(leftCanvasRef.current);
       if (rightCanvasRef.current) disposeScatterRenderer(rightCanvasRef.current);
     }
     prevFeatureRef.current = selectedFeature;
-    prevAlgoRef.current = leftAlgo;
 
-    if (selectedFeature === 'sorting') {
-      generateArray();
-    } else {
+    if (selectedFeature !== 'sorting') {
       setMetadata('');
       if (leftCanvasRef.current) {
         const ctx = leftCanvasRef.current.getContext('2d');
@@ -521,18 +572,42 @@ function App() {
         }
       }
     }
-  }, [selectedFeature, leftAlgo, generateArray]);
+  }, [selectedFeature]);
 
   // ─── Handle feature change ───
   const handleFeatureChange = (feature: Feature) => {
     setSelectedFeature(feature);
-    const firstAlgo = featureAlgorithms[feature][0] as SortingAlgo;
-    setLeftAlgo(firstAlgo);
+    const defaultAlgo = getDefaultAlgorithm(feature);
+    setLeftAlgo(defaultAlgo);
+    setRightAlgo(defaultAlgo);
     setShowDetails(false);
     setShowLeftDetails(false);
     setShowRightDetails(false);
     if (isSplit) setIsSplit(false);
+
+    // If switching to sorting, generate a new array (already handled in useEffect)
+    // But we reset the size change ref so that the size change effect doesn't trigger twice.
+    if (feature === 'sorting') {
+      isSizeChangeRef.current = true; // Allow the size change effect to run
+      // The generateArray will be called by the feature change effect?
+      // Actually we rely on the generateArray called from the feature switch effect? We'll call it manually here.
+      // But we need to ensure it's called after state updates. We can use a timeout.
+      // Instead, let's just call generateArray directly after setting state.
+      // Since generateArray depends on selectedFeature and arraySize, and we are updating both, we can call it after a small delay.
+      // Or we can rely on the useEffect that watches selectedFeature to generate array.
+      // Actually I'll add a useEffect that watches selectedFeature and generates a new array when it becomes 'sorting' from a non-sorting state.
+      // But we already have the handleFeatureChange setting the state, and we can use the existing feature change useEffect to generate.
+      // I'll add a condition in the feature change useEffect to generateArray when selectedFeature is 'sorting' and previous wasn't.
+    }
   };
+
+  // ─── Generate array when switching to sorting feature ───
+  useEffect(() => {
+    if (selectedFeature === 'sorting' && prevFeatureRef.current !== selectedFeature) {
+      // Only generate if we just switched from optimization to sorting
+      generateArray();
+    }
+  }, [selectedFeature, generateArray]);
 
   // ─── Play button config ───
   const getPlayButtonConfig = () => {
@@ -543,11 +618,9 @@ function App() {
   const playConfig = getPlayButtonConfig();
 
   const isSorting = selectedFeature === 'sorting';
-
-  // ─── Available sizes: 200 available in both modes ───
   const availableSizes: ArraySize[] = [25, 50, 100, 200];
-
-  const currentAlgoInfo = algorithmInfoMap[leftAlgo];
+  const algorithmIds = getAlgorithmIds(selectedFeature);
+  const currentAlgoInfo = getInfo(selectedFeature, leftAlgo);
 
   // ─── RENDER ───
   return (
@@ -605,8 +678,11 @@ function App() {
             }}
             disabled={playState === 'playing'}
           >
-            <option value="sorting">🔵 Sorting</option>
-            <option value="optimization">🧠 Optimization</option>
+            {features.map((feature) => (
+              <option key={feature} value={feature}>
+                {featureDisplayNames[feature]}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -646,14 +722,18 @@ function App() {
           </button>
         )}
 
-        {/* Array Size - 200 available in both modes */}
+        {/* Array Size */}
         {isSorting && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>Size:</span>
             {availableSizes.map((size) => (
               <button
                 key={size}
-                onClick={() => setArraySize(size)}
+                onClick={() => {
+                  setArraySize(size);
+                  // The useEffect will trigger generateArray, but we also reset the ref
+                  // to allow the effect to run.
+                }}
                 style={{
                   padding: '4px 10px',
                   borderRadius: '4px',
@@ -745,7 +825,7 @@ function App() {
       >
         {!isSplit || !isSorting ? (
           // ─── UNSPLIT VIEW (Canvas + History) ───
-          <>
+          <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             {/* Left Canvas - Always visible */}
             <div
               style={{
@@ -782,7 +862,7 @@ function App() {
                   <select
                     value={leftAlgo}
                     onChange={(e) => {
-                      setLeftAlgo(e.target.value as SortingAlgo);
+                      setLeftAlgo(e.target.value);
                       setShowDetails(false);
                     }}
                     style={{
@@ -798,9 +878,11 @@ function App() {
                     }}
                     disabled={playState === 'playing'}
                   >
-                    <option value="bubble">Bubble Sort</option>
-                    <option value="merge">Merge Sort</option>
-                    <option value="quick">Quick Sort</option>
+                    {algorithmIds.map((id) => (
+                      <option key={id} value={id}>
+                        {getDisplayName(selectedFeature, id)}
+                      </option>
+                    ))}
                   </select>
                   <button
                     onClick={() => setShowDetails(!showDetails)}
@@ -855,8 +937,8 @@ function App() {
                 />
               </div>
 
-              {/* Details Popup */}
-              {showDetails && currentAlgoInfo && !isSplit && (
+              {/* Details Popup (Unsplit) */}
+              {showDetails && currentAlgoInfo && (
                 <div
                   style={{
                     position: 'absolute',
@@ -925,7 +1007,7 @@ function App() {
                 isPlaying={playState === 'playing'}
               />
             </div>
-          </>
+          </div>
         ) : (
           // ─── SPLIT VIEW: Two Canvases (No History) ───
           <div
@@ -970,7 +1052,7 @@ function App() {
                   <select
                     value={leftAlgo}
                     onChange={(e) => {
-                      setLeftAlgo(e.target.value as SortingAlgo);
+                      setLeftAlgo(e.target.value);
                       setShowLeftDetails(false);
                     }}
                     style={{
@@ -986,9 +1068,11 @@ function App() {
                     }}
                     disabled={playState === 'playing'}
                   >
-                    <option value="bubble">Bubble</option>
-                    <option value="merge">Merge</option>
-                    <option value="quick">Quick</option>
+                    {algorithmIds.map((id) => (
+                      <option key={id} value={id}>
+                        {getDisplayName(selectedFeature, id)}
+                      </option>
+                    ))}
                   </select>
                   <button
                     onClick={() => setShowLeftDetails(!showLeftDetails)}
@@ -1047,64 +1131,68 @@ function App() {
               </div>
 
               {/* Left Details Popup */}
-              {showLeftDetails && algorithmInfoMap[leftAlgo] && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '50px',
-                    left: '10px',
-                    zIndex: 20,
-                    padding: '14px 16px',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    width: '300px',
-                    maxWidth: '300px',
-                    boxShadow: '0 15px 40px rgba(0,0,0,0.9)',
-                    pointerEvents: 'auto',
-                  }}
-                >
-                  <button
-                    onClick={() => setShowLeftDetails(false)}
-                    style={{
-                      position: 'absolute',
-                      top: '4px',
-                      right: '8px',
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#64748b',
-                      cursor: 'pointer',
-                      fontSize: '18px',
-                      lineHeight: '1',
-                    }}
-                  >
-                    ✕
-                  </button>
-                  <h4 style={{ margin: '0 0 6px 0', color: '#e2e8f0', fontSize: '18px', fontWeight: 'bold' }}>
-                    {algorithmInfoMap[leftAlgo].name}
-                  </h4>
-                  <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#94a3b8', lineHeight: '1.4' }}>
-                    {algorithmInfoMap[leftAlgo].description}
-                  </p>
+              {showLeftDetails && (() => {
+                const info = getInfo(selectedFeature, leftAlgo);
+                if (!info) return null;
+                return (
                   <div
                     style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '8px',
-                      fontSize: '12px',
-                      color: '#64748b',
-                      borderTop: '1px solid #1e293b',
-                      paddingTop: '6px',
-                      marginTop: '4px',
+                      position: 'absolute',
+                      top: '50px',
+                      left: '10px',
+                      zIndex: 20,
+                      padding: '14px 16px',
+                      background: '#0f172a',
+                      border: '1px solid #334155',
+                      borderRadius: '8px',
+                      width: '300px',
+                      maxWidth: '300px',
+                      boxShadow: '0 15px 40px rgba(0,0,0,0.9)',
+                      pointerEvents: 'auto',
                     }}
                   >
-                    <span>⚡ Best: {algorithmInfoMap[leftAlgo].bestCase}</span>
-                    <span>📊 Avg: {algorithmInfoMap[leftAlgo].avgCase}</span>
-                    <span>🐌 Worst: {algorithmInfoMap[leftAlgo].worstCase}</span>
-                    <span>💾 Space: {algorithmInfoMap[leftAlgo].spaceComplexity}</span>
+                    <button
+                      onClick={() => setShowLeftDetails(false)}
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        right: '8px',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        fontSize: '18px',
+                        lineHeight: '1',
+                      }}
+                    >
+                      ✕
+                    </button>
+                    <h4 style={{ margin: '0 0 6px 0', color: '#e2e8f0', fontSize: '18px', fontWeight: 'bold' }}>
+                      {info.name}
+                    </h4>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#94a3b8', lineHeight: '1.4' }}>
+                      {info.description}
+                    </p>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px',
+                        fontSize: '12px',
+                        color: '#64748b',
+                        borderTop: '1px solid #1e293b',
+                        paddingTop: '6px',
+                        marginTop: '4px',
+                      }}
+                    >
+                      <span>⚡ Best: {info.bestCase}</span>
+                      <span>📊 Avg: {info.avgCase}</span>
+                      <span>🐌 Worst: {info.worstCase}</span>
+                      <span>💾 Space: {info.spaceComplexity}</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* ─── RIGHT PANEL ─── */}
@@ -1140,7 +1228,7 @@ function App() {
                   <select
                     value={rightAlgo}
                     onChange={(e) => {
-                      setRightAlgo(e.target.value as SortingAlgo);
+                      setRightAlgo(e.target.value);
                       setShowRightDetails(false);
                     }}
                     style={{
@@ -1156,9 +1244,11 @@ function App() {
                     }}
                     disabled={playState === 'playing'}
                   >
-                    <option value="bubble">Bubble</option>
-                    <option value="merge">Merge</option>
-                    <option value="quick">Quick</option>
+                    {algorithmIds.map((id) => (
+                      <option key={id} value={id}>
+                        {getDisplayName(selectedFeature, id)}
+                      </option>
+                    ))}
                   </select>
                   <button
                     onClick={() => setShowRightDetails(!showRightDetails)}
@@ -1217,64 +1307,68 @@ function App() {
               </div>
 
               {/* Right Details Popup */}
-              {showRightDetails && algorithmInfoMap[rightAlgo] && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '50px',
-                    left: '10px',
-                    zIndex: 20,
-                    padding: '14px 16px',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    width: '300px',
-                    maxWidth: '300px',
-                    boxShadow: '0 15px 40px rgba(0,0,0,0.9)',
-                    pointerEvents: 'auto',
-                  }}
-                >
-                  <button
-                    onClick={() => setShowRightDetails(false)}
-                    style={{
-                      position: 'absolute',
-                      top: '4px',
-                      right: '8px',
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#64748b',
-                      cursor: 'pointer',
-                      fontSize: '18px',
-                      lineHeight: '1',
-                    }}
-                  >
-                    ✕
-                  </button>
-                  <h4 style={{ margin: '0 0 6px 0', color: '#e2e8f0', fontSize: '18px', fontWeight: 'bold' }}>
-                    {algorithmInfoMap[rightAlgo].name}
-                  </h4>
-                  <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#94a3b8', lineHeight: '1.4' }}>
-                    {algorithmInfoMap[rightAlgo].description}
-                  </p>
+              {showRightDetails && (() => {
+                const info = getInfo(selectedFeature, rightAlgo);
+                if (!info) return null;
+                return (
                   <div
                     style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '8px',
-                      fontSize: '12px',
-                      color: '#64748b',
-                      borderTop: '1px solid #1e293b',
-                      paddingTop: '6px',
-                      marginTop: '4px',
+                      position: 'absolute',
+                      top: '50px',
+                      left: '10px',
+                      zIndex: 20,
+                      padding: '14px 16px',
+                      background: '#0f172a',
+                      border: '1px solid #334155',
+                      borderRadius: '8px',
+                      width: '300px',
+                      maxWidth: '300px',
+                      boxShadow: '0 15px 40px rgba(0,0,0,0.9)',
+                      pointerEvents: 'auto',
                     }}
                   >
-                    <span>⚡ Best: {algorithmInfoMap[rightAlgo].bestCase}</span>
-                    <span>📊 Avg: {algorithmInfoMap[rightAlgo].avgCase}</span>
-                    <span>🐌 Worst: {algorithmInfoMap[rightAlgo].worstCase}</span>
-                    <span>💾 Space: {algorithmInfoMap[rightAlgo].spaceComplexity}</span>
+                    <button
+                      onClick={() => setShowRightDetails(false)}
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        right: '8px',
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        fontSize: '18px',
+                        lineHeight: '1',
+                      }}
+                    >
+                      ✕
+                    </button>
+                    <h4 style={{ margin: '0 0 6px 0', color: '#e2e8f0', fontSize: '18px', fontWeight: 'bold' }}>
+                      {info.name}
+                    </h4>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#94a3b8', lineHeight: '1.4' }}>
+                      {info.description}
+                    </p>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px',
+                        fontSize: '12px',
+                        color: '#64748b',
+                        borderTop: '1px solid #1e293b',
+                        paddingTop: '6px',
+                        marginTop: '4px',
+                      }}
+                    >
+                      <span>⚡ Best: {info.bestCase}</span>
+                      <span>📊 Avg: {info.avgCase}</span>
+                      <span>🐌 Worst: {info.worstCase}</span>
+                      <span>💾 Space: {info.spaceComplexity}</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         )}
