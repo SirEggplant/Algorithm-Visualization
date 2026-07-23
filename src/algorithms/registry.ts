@@ -6,6 +6,8 @@ import { bubbleSortGenerator, BUBBLE_SORT_INFO } from './sorting/bubbleSort';
 import { mergeSortGenerator, MERGE_SORT_INFO } from './sorting/mergeSort';
 import { quickSortGenerator, QUICK_SORT_INFO } from './sorting/quickSort';
 import { insertionSortGenerator, INSERTION_SORT_INFO } from './sorting/insertionSort';
+import { timsortGenerator, TIMSORT_INFO } from './sorting/timsort';
+import { introsortGenerator, INTROSORT_INFO } from './sorting/introsort';
 
 // ─── Optimization Algorithms ───
 import { hillClimbingGenerator } from './hillClimbing/peakFinder';
@@ -54,6 +56,18 @@ const algorithmRegistry: Record<Feature, Record<string, AlgorithmEntry>> = {
       generator: insertionSortGenerator as any,
       info: INSERTION_SORT_INFO,
     },
+    timsort: {
+      id: 'timsort',
+      displayName: 'Timsort',
+      generator: timsortGenerator as any,
+      info: TIMSORT_INFO,
+    },
+    introsort: {
+      id: 'introsort',
+      displayName: 'Introsort',
+      generator: introsortGenerator as any,
+      info: INTROSORT_INFO,
+    },
   },
   optimization: {
     hillClimbing: {
@@ -70,6 +84,7 @@ const algorithmRegistry: Record<Feature, Record<string, AlgorithmEntry>> = {
       },
     },
   },
+  
 };
 
 // ─── Public Helpers ───
