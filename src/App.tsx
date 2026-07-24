@@ -74,10 +74,13 @@ function App() {
   const leftFinished = useRef<boolean>(false);
   const rightFinished = useRef<boolean>(false);
 
+  // ─── Store the original unsorted array ───
+  const originalArrayRef = useRef<number[]>([]);
+
   const prevFeatureRef = useRef<Feature>(selectedFeature);
   const prevAlgoRef = useRef<string>(leftAlgo);
   const isFirstRunRef = useRef(true);
-  const isSizeChangeRef = useRef(true); // For size change detection
+  const isSizeChangeRef = useRef(true);
 
   // --- Core Functions ---
 
@@ -129,6 +132,8 @@ function App() {
       () => Math.floor(Math.random() * 200) + 1
     );
     setArray(newArr);
+    // Store a copy of the original array
+    originalArrayRef.current = [...newArr];
     setPlayState('idle');
     setHistory([]);
     setCurrentHistoryIndex(-1);
@@ -160,10 +165,58 @@ function App() {
     setMetadata('Ready to sort!');
   }, [selectedFeature, arraySize]);
 
+  // ─── Reset to the original unsorted array ───
+  const resetToOriginalArray = useCallback(() => {
+    if (originalArrayRef.current.length === 0) return;
+    const originalArr = [...originalArrayRef.current];
+    setArray(originalArr);
+    setPlayState('idle');
+    setHistory([]);
+    setCurrentHistoryIndex(-1);
+
+    leftStepCount.current = 0;
+    rightStepCount.current = 0;
+    leftTotalSteps.current = 0;
+    rightTotalSteps.current = 0;
+    leftFinished.current = false;
+    rightFinished.current = false;
+
+    leftEngineRef.current.pause();
+    rightEngineRef.current.pause();
+    if (replayIntervalRef.current) {
+      clearInterval(replayIntervalRef.current);
+      replayIntervalRef.current = null;
+    }
+
+    leftEngineRef.current['generator'] = null;
+    rightEngineRef.current['generator'] = null;
+
+    requestAnimationFrame(() => {
+      const state: VisualizationState = {
+        type: 'array',
+        data: originalArr,
+        highlights: {},
+        metadata: { action: 'Ready to sort!' },
+      };
+      if (leftCanvasRef.current) drawArray(leftCanvasRef.current, state);
+      if (rightCanvasRef.current) drawArray(rightCanvasRef.current, state);
+    });
+    setMetadata('Ready to sort!');
+  }, []);
+
   // ─── Start Algorithm ───
   const startAlgorithm = useCallback(() => {
     if (array.length === 0) {
       generateArray();
+      return;
+    }
+
+    // If we're in idle state and the array is already sorted, reset to original
+    // This handles the case where we finished sorting and click Play again
+    if (playState === 'idle' && leftFinished.current) {
+      resetToOriginalArray();
+      // After reset, we need to start sorting again
+      setTimeout(() => startAlgorithm(), 50);
       return;
     }
 
@@ -185,7 +238,8 @@ function App() {
 
     const checkBothFinished = () => {
       if (leftFinished.current && rightFinished.current) {
-        // Both finished
+        setPlayState('idle');
+        setMetadata('Sorting complete! Press Play to sort again.');
       }
     };
 
@@ -247,13 +301,14 @@ function App() {
           leftTotalSteps.current = leftStepCount.current;
           leftFinished.current = true;
           setPlayState('idle');
+          setMetadata('Sorting complete! Press Play to sort again.');
         }
       };
 
       setPlayState('playing');
       leftEngineRef.current.play(SPEED_MAP[speed]);
     }
-  }, [array, selectedFeature, leftAlgo, rightAlgo, isSplit, speed, generateArray, updateMetadata]);
+  }, [array, selectedFeature, leftAlgo, rightAlgo, isSplit, speed, generateArray, updateMetadata, resetToOriginalArray, playState]);
 
   // ─── Pause ───
   const pauseAlgorithm = useCallback(() => {
@@ -297,14 +352,12 @@ function App() {
       setPlayState('paused');
     }
 
-    // 1. If we have history and we're not at the end, replay the next step from history
     if (history.length > 0 && currentHistoryIndex < history.length - 1) {
       const nextIndex = currentHistoryIndex + 1;
       const nextEntry = history[nextIndex];
       if (nextEntry) {
         updateUIWithState(nextEntry.state, leftCanvasRef.current);
         setCurrentHistoryIndex(nextIndex);
-        // ✅ Update the step counter to match the replayed step
         leftStepCount.current = nextEntry.step;
         leftEngineRef.current.pause();
         setPlayState('paused');
@@ -312,25 +365,19 @@ function App() {
       }
     }
 
-    // 2. If we're at the latest step, generate a new step from the engine
     if (selectedFeature === 'sorting' && array.length === 0) return;
 
-    // If no generator is loaded, create one
     if (!leftEngineRef.current['generator']) {
       const gen = getGenerator(selectedFeature, leftAlgo, array);
       if (!gen) return;
 
-      // Reset counter for a fresh start
       leftStepCount.current = 0;
 
       leftEngineRef.current.load(gen);
       leftEngineRef.current.onUpdate = (state: VisualizationState) => {
-        // Draw and update metadata
         if (leftCanvasRef.current) drawArray(leftCanvasRef.current, state);
         updateMetadata(state);
-        // Increment step counter
         leftStepCount.current += 1;
-        // Push to history
         setHistory((prev) => {
           const newEntry: HistoryEntry = {
             step: prev.length + 1,
@@ -343,7 +390,6 @@ function App() {
       };
     }
 
-    // Perform one step
     leftEngineRef.current.pause();
     setPlayState('paused');
     leftEngineRef.current.step();
@@ -366,6 +412,7 @@ function App() {
         const entry = history[targetIndex];
         updateUIWithState(entry.state, leftCanvasRef.current);
         setCurrentHistoryIndex(targetIndex);
+        leftStepCount.current = entry.step;
         setPlayState('paused');
         return;
       }
@@ -385,6 +432,7 @@ function App() {
         if (entry) {
           updateUIWithState(entry.state, leftCanvasRef.current);
           setCurrentHistoryIndex(current);
+          leftStepCount.current = entry.step;
         }
       }, 20);
     },
@@ -404,7 +452,6 @@ function App() {
     setShowLeftDetails(false);
     setShowRightDetails(false);
 
-    // ─── Reset all step counters and flags ───
     leftStepCount.current = 0;
     rightStepCount.current = 0;
     leftTotalSteps.current = 0;
@@ -418,11 +465,9 @@ function App() {
     const newSplitState = !isSplit;
     setIsSplit(newSplitState);
 
-    // ─── Clear the engine generators so Play starts fresh ───
     leftEngineRef.current['generator'] = null;
     rightEngineRef.current['generator'] = null;
 
-    // ─── Redraw the current array on both canvases ───
     if (array.length > 0) {
       const state: VisualizationState = {
         type: 'array',
@@ -470,7 +515,6 @@ function App() {
       return;
     }
 
-    // Pause everything
     leftEngineRef.current.pause();
     rightEngineRef.current.pause();
     if (replayIntervalRef.current) {
@@ -478,7 +522,6 @@ function App() {
       replayIntervalRef.current = null;
     }
 
-    // Reset counters and state
     setPlayState('idle');
     leftStepCount.current = 0;
     rightStepCount.current = 0;
@@ -490,11 +533,9 @@ function App() {
     setCurrentHistoryIndex(-1);
     setMetadata('');
 
-    // Clear engine generators so Play starts fresh
     leftEngineRef.current['generator'] = null;
     rightEngineRef.current['generator'] = null;
 
-    // Redraw the current array (keeping the same unsorted array)
     if (array.length > 0) {
       const state: VisualizationState = {
         type: 'array',
@@ -507,14 +548,13 @@ function App() {
     }
   }, [leftAlgo, rightAlgo, selectedFeature, isSplit, array]);
 
-  // ─── Regenerate array when size changes (except on initial mount) ───
+  // ─── Regenerate array when size changes ───
   useEffect(() => {
     if (selectedFeature !== 'sorting') return;
     if (isSizeChangeRef.current) {
       isSizeChangeRef.current = false;
       return;
     }
-    // Generate a new array with the new size
     generateArray();
   }, [arraySize, selectedFeature, generateArray]);
 
@@ -533,7 +573,7 @@ function App() {
     };
   }, []);
 
-  // ─── Handle Feature / Algorithm switching (feature changes only) ───
+  // ─── Handle Feature switching ───
   useEffect(() => {
     leftEngineRef.current.pause();
     rightEngineRef.current.pause();
@@ -548,7 +588,6 @@ function App() {
     setShowLeftDetails(false);
     setShowRightDetails(false);
 
-    // Dispose 3D renderer when leaving optimization
     if (prevFeatureRef.current === 'optimization' && selectedFeature !== 'optimization') {
       if (leftCanvasRef.current) disposeScatterRenderer(leftCanvasRef.current);
       if (rightCanvasRef.current) disposeScatterRenderer(rightCanvasRef.current);
@@ -584,27 +623,11 @@ function App() {
     setShowLeftDetails(false);
     setShowRightDetails(false);
     if (isSplit) setIsSplit(false);
-
-    // If switching to sorting, generate a new array (already handled in useEffect)
-    // But we reset the size change ref so that the size change effect doesn't trigger twice.
-    if (feature === 'sorting') {
-      isSizeChangeRef.current = true; // Allow the size change effect to run
-      // The generateArray will be called by the feature change effect?
-      // Actually we rely on the generateArray called from the feature switch effect? We'll call it manually here.
-      // But we need to ensure it's called after state updates. We can use a timeout.
-      // Instead, let's just call generateArray directly after setting state.
-      // Since generateArray depends on selectedFeature and arraySize, and we are updating both, we can call it after a small delay.
-      // Or we can rely on the useEffect that watches selectedFeature to generate array.
-      // Actually I'll add a useEffect that watches selectedFeature and generates a new array when it becomes 'sorting' from a non-sorting state.
-      // But we already have the handleFeatureChange setting the state, and we can use the existing feature change useEffect to generate.
-      // I'll add a condition in the feature change useEffect to generateArray when selectedFeature is 'sorting' and previous wasn't.
-    }
   };
 
   // ─── Generate array when switching to sorting feature ───
   useEffect(() => {
     if (selectedFeature === 'sorting' && prevFeatureRef.current !== selectedFeature) {
-      // Only generate if we just switched from optimization to sorting
       generateArray();
     }
   }, [selectedFeature, generateArray]);
@@ -729,11 +752,7 @@ function App() {
             {availableSizes.map((size) => (
               <button
                 key={size}
-                onClick={() => {
-                  setArraySize(size);
-                  // The useEffect will trigger generateArray, but we also reset the ref
-                  // to allow the effect to run.
-                }}
+                onClick={() => setArraySize(size)}
                 style={{
                   padding: '4px 10px',
                   borderRadius: '4px',
