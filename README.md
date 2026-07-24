@@ -2,8 +2,6 @@
 
 A modular, extensible interactive platform for visualizing sorting algorithms, search algorithms, and evolutionary simulations. Built with React, TypeScript, and Vite.
 
-![Algorithm Visualizer Demo](https://via.placeholder.com/800x400?text=Algorithm+Visualizer+Screenshot)
-
 ## ✨ Features
 
 ### 🔵 Sorting Algorithms
