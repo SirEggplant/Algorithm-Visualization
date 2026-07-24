@@ -93,15 +93,11 @@ User sees the animation
 ### Prerequisites
 
 - Node.js (v18 or higher)
-- npm or yarn
+- npm
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/algorithm-visualizer.git
-cd algorithm-visualizer
-
 # Install dependencies
 npm install
 
