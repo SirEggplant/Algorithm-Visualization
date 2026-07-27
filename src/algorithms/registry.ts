@@ -10,8 +10,8 @@ import { timsortGenerator, TIMSORT_INFO } from './sorting/timsort';
 import { introsortGenerator, INTROSORT_INFO } from './sorting/introsort';
 
 // ─── Optimization Algorithms ───
-import { hillClimbingGenerator } from './hillClimbing/peakFinder';
-
+import { hillClimbingGenerator, HILL_CLIMBING_INFO } from './optimization/hillClimbing';
+import { hillClimbingRestartGenerator, HILL_CLIMBING_RESTART_INFO } from './optimization/hillClimbingRestart';
 // ─── Types ───
 export type Feature = 'sorting' | 'optimization';
 
@@ -69,19 +69,19 @@ const algorithmRegistry: Record<Feature, Record<string, AlgorithmEntry>> = {
       info: INTROSORT_INFO,
     },
   },
+  
   optimization: {
     hillClimbing: {
       id: 'hillClimbing',
-      displayName: 'Hill Climbing',
+      displayName: '⛰️ Hill Climbing (Basic)',
       generator: hillClimbingGenerator as any,
-      info: {
-        name: 'Hill Climbing',
-        description: 'A greedy local search algorithm that iteratively moves to a neighboring solution with higher fitness. Can get stuck in local maxima.',
-        bestCase: 'O(1)',
-        avgCase: 'O(n)',
-        worstCase: 'O(∞)',
-        spaceComplexity: 'O(1)',
-      },
+      info: HILL_CLIMBING_INFO,
+    },
+    hillClimbingRestart: {
+      id: 'hillClimbingRestart',
+      displayName: '⛰️ Hill Climbing (Restarts)',
+      generator: hillClimbingRestartGenerator as any,
+      info: HILL_CLIMBING_RESTART_INFO,
     },
   },
   

@@ -1,5 +1,5 @@
 // src/renderers/arrayRenderer.ts
-import type { VisualizationState } from '../core/types';
+import type { VisualizationState } from '../../core/types';
 
 export function drawArray(canvas: HTMLCanvasElement, state: VisualizationState) {
   if (!canvas) return;
