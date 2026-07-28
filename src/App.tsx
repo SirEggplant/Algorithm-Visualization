@@ -42,7 +42,6 @@ function App() {
           />
         ) : (
           <OptimizationFeature
-            isSplit={isSplit}
             selectedFeature={selectedFeature}
             setSelectedFeature={setSelectedFeature}
           />
