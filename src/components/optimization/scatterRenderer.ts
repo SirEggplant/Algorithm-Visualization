@@ -8,7 +8,6 @@ const DOT_RADIUS = 0.12;
 const STAR_RADIUS = 0.22;
 const CAMERA_RADIUS = 17;
 
-// ─── FIXED fitness function (used for terrain and dots) ───
 // This is the ONLY fitness function used by the renderer.
 // Algorithms will use the SAME function to ensure consistency.
 const fitnessFunction = (x: number, y: number): number => {
