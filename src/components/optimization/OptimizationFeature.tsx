@@ -2,7 +2,14 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { VisualizerEngine } from '../../core/engine';
 import type { VisualizationState, Point } from '../../core/types';
-import { drawScatter, resetCamera, disposeScatterRenderer, rebuildTerrain, clearScene } from './scatterRenderer';
+import {
+  drawScatter,
+  resetCamera,
+  disposeScatterRenderer,
+  rebuildTerrain,
+  clearScene,
+  setFitnessFunction,
+} from './scatterRenderer';
 import {
   getAlgorithmIds,
   getDisplayName,
@@ -11,7 +18,6 @@ import {
   getDefaultAlgorithm,
 } from '../../algorithms/registry';
 import { hillClimbingGenerator } from '../../algorithms/optimization/hillClimbing';
-import { hillClimbingRestartGenerator } from '../../algorithms/optimization/hillClimbingRestart';
 
 type Feature = 'sorting' | 'optimization';
 type PlayState = 'idle' | 'playing' | 'paused';
@@ -26,47 +32,71 @@ const SPEED_MAP: Record<SpeedOption, number> = {
 };
 
 const featureDisplayNames: Record<Feature, string> = {
-  sorting: '🔵 Sorting',
-  optimization: '🧠 Optimization',
+  sorting: 'Sorting',
+  optimization: 'Optimization',
 };
 
-// ─── 4 UNIQUE MOUNTAIN CONFIGURATIONS ───
-const MOUNTAIN_CONFIGS: Record<MountainSize, { range: number; resolution: number; scale: number }> = {
-  small: { range: 4, resolution: 50, scale: 1.2 },
-  medium: { range: 6, resolution: 70, scale: 1.8 },
-  large: { range: 8, resolution: 90, scale: 2.5 },
-  xlarge: { range: 10, resolution: 110, scale: 3.5 },
+// ─── Mountain size configurations ───
+const MOUNTAIN_CONFIGS: Record<MountainSize, { range: number; resolution: number }> = {
+  small: { range: 4, resolution: 50 },
+  medium: { range: 6, resolution: 70 },
+  large: { range: 8, resolution: 90 },
+  xlarge: { range: 10, resolution: 110 },
 };
 
-// ─── 4 DIFFERENT FITNESS FUNCTIONS ───
-// These are used by the algorithms, NOT the renderer.
-// The renderer uses a fixed fitness function for terrain.
+// ─── 4 UNIQUE MOUNTAIN RANGES (Inspired by Real Geology) ───
 const fitnessFunctions = {
+  /**
+   * SMALL: Mount Monadnock / Table Mountain
+   * A single dominant, steep peak with gentle rolling foothills.
+   */
   small: (x: number, y: number): number => {
-    return 0.6 * Math.sin(x) * Math.cos(y) +
-           0.4 * Math.sin(x * 1.5 + 0.5) * Math.cos(y * 1.2 - 0.3) +
-           0.3 * Math.exp(-((x - 1.5) ** 2 + (y - 1.5) ** 2) / 3);
+    const mainPeak = 1.2 * Math.exp(-((x * x + y * y) / 0.9));
+    const foothills = 0.3 * Math.sin(x * 0.7 + 0.5) * Math.cos(y * 0.8 - 0.3);
+    const secondary = 0.4 * Math.exp(-(((x + 1.8) ** 2 + (y - 1.2) ** 2) / 1.5));
+    return mainPeak + secondary + foothills + 0.1;
   },
+
+  /**
+   * MEDIUM: The Rocky Mountains / The Alps
+   * Multiple sharp, distinct peaks with a prominent ridge line.
+   */
   medium: (x: number, y: number): number => {
-    return 0.8 * Math.sin(x) * Math.cos(y) +
-           0.6 * Math.sin(x * 1.7 + 1.2) * Math.cos(y * 1.3 - 0.8) +
-           0.5 * Math.cos(x * 0.7 - 0.5) * Math.sin(y * 0.9 + 0.7) +
-           0.4 * Math.exp(-((x - 2) ** 2 + (y + 1.5) ** 2) / 2.5);
+    const peak1 = 1.8 * Math.exp(-(((x - 1.5) ** 2 + (y - 0.5) ** 2) / 0.8));
+    const peak2 = 1.5 * Math.exp(-(((x + 2.0) ** 2 + (y + 1.0) ** 2) / 0.7));
+    const peak3 = 1.3 * Math.exp(-(((x - 0.5) ** 2 + (y - 3.0) ** 2) / 0.9));
+    const ridge = 0.6 * Math.sin(x * 0.5 + 0.2) * Math.cos(y * 0.4 + 0.8) + 0.3;
+    return peak1 + peak2 + peak3 + ridge + 0.2;
   },
+
+  /**
+   * LARGE: The Himalayas
+   * A massive, high-altitude plateau with 3 colossal, jagged peaks.
+   */
   large: (x: number, y: number): number => {
-    return 1.0 * Math.sin(x) * Math.cos(y) +
-           0.8 * Math.sin(x * 2.1 + 0.7) * Math.cos(y * 1.8 - 1.2) +
-           0.6 * Math.cos(x * 0.5 + 1.3) * Math.sin(y * 0.7 - 0.9) +
-           0.5 * Math.sin(x * 0.3 + 0.2) * Math.sin(y * 0.4 + 0.5) * 1.5 +
-           0.4 * Math.exp(-((x + 2.5) ** 2 + (y - 2) ** 2) / 2);
+    const plateau = 0.8 * Math.exp(-((y * y) / 6)) * (1.2 + 0.5 * Math.sin(x * 0.6 + 0.3));
+    const peak1 = 3.0 * Math.exp(-(((x - 2.5) ** 2 + (y - 1.5) ** 2) / 0.6));
+    const peak2 = 2.7 * Math.exp(-(((x + 2.5) ** 2 + (y + 1.0) ** 2) / 0.6));
+    const peak3 = 2.2 * Math.exp(-(((x - 0.5) ** 2 + (y - 3.5) ** 2) / 0.7));
+    const ridge = 0.8 * Math.sin(x * 0.4 + 1.2) * Math.cos(y * 0.5 - 0.7);
+    return plateau + peak1 + peak2 + peak3 + ridge + 0.3;
   },
+
+  /**
+   * X-LARGE: The Andes / Patagonia
+   * A highly jagged, elongated mountain range with 7+ sharp peaks running diagonally.
+   */
   xlarge: (x: number, y: number): number => {
-    return 1.2 * Math.sin(x) * Math.cos(y) +
-           1.0 * Math.sin(x * 2.5 + 0.3) * Math.cos(y * 2.2 - 0.5) +
-           0.8 * Math.cos(x * 0.6 + 1.7) * Math.sin(y * 0.8 - 1.1) +
-           0.6 * Math.sin(x * 0.4 + 0.8) * Math.sin(y * 0.5 + 1.3) * 1.8 +
-           0.5 * Math.sin(x * 1.2 - 0.5) * Math.cos(y * 1.5 + 0.9) +
-           0.4 * Math.exp(-((x + 3) ** 2 + (y - 2.5) ** 2) / 1.8);
+    const spine = 1.2 * Math.exp(-((y * y) / 4)) * (1.8 + 0.7 * Math.sin(x * 1.5 + 0.5) + 0.5 * Math.cos(x * 2.3 - 0.8));
+    const p1 = 3.5 * Math.exp(-(((x - 3.5) ** 2 + (y - 1.5) ** 2) / 0.5));
+    const p2 = 2.8 * Math.exp(-(((x - 1.5) ** 2 + (y - 2.5) ** 2) / 0.5));
+    const p3 = 2.5 * Math.exp(-(((x + 1.5) ** 2 + (y - 1.0) ** 2) / 0.5));
+    const p4 = 3.2 * Math.exp(-(((x + 3.5) ** 2 + (y - 2.0) ** 2) / 0.5));
+    const p5 = 2.2 * Math.exp(-(((x + 2.0) ** 2 + (y + 2.5) ** 2) / 0.6));
+    const p6 = 2.0 * Math.exp(-(((x - 2.5) ** 2 + (y + 1.5) ** 2) / 0.6));
+    const p7 = 1.8 * Math.exp(-(((x + 0.5) ** 2 + (y - 4.0) ** 2) / 0.7));
+    const terrain = 0.5 * Math.sin(x * 0.7 + 1.5) * Math.cos(y * 0.9 - 0.3);
+    return spine + p1 + p2 + p3 + p4 + p5 + p6 + p7 + terrain + 0.5;
   },
 };
 
@@ -86,7 +116,7 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   const engineRef = useRef<VisualizerEngine>(new VisualizerEngine());
 
   // ─── Core State ───
-  const [selectedAlgo, setSelectedAlgo] = useState<string>(getDefaultAlgorithm('optimization'));
+  const [selectedAlgo] = useState<string>(getDefaultAlgorithm('optimization')); // Only one algorithm for now
   const [mountainSize, setMountainSize] = useState<MountainSize>('medium');
   const [playState, setPlayState] = useState<PlayState>('idle');
   const [speed, setSpeed] = useState<SpeedOption>('normal');
@@ -99,7 +129,7 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   const isFinished = useRef<boolean>(false);
 
   // ─── Algorithm Parameters ───
-  const [restarts, setRestarts] = useState<number>(20);
+  const [restarts, setRestarts] = useState<number>(1);
 
   const algorithmIds = getAlgorithmIds('optimization');
   const currentAlgoInfo = getInfo('optimization', selectedAlgo);
@@ -135,6 +165,7 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
     drawMountain();
   }, [drawMountain]);
 
+  // ─── Update display ───
   const updateUIWithState = useCallback((state: VisualizationState) => {
     if (!canvasRef.current) return;
     drawScatter(canvasRef.current, state);
@@ -154,13 +185,11 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
     }
     setMetadata(metaText);
 
-    // ─── FIXED: Only stop on FINAL message ───
-    if (m.action?.includes('✅ Complete!') || m.action?.includes('Stuck') || m.action?.includes('Global')) {
+    // Stop only when final flag is true (only on the last yield)
+    if (m.final === true) {
       isFinished.current = true;
       setPlayState('idle');
-      if (!m.action?.includes('✅ Complete!')) {
-        setMetadata(`${metaText} | ✅ Done! Press Play to run again.`);
-      }
+      setMetadata(`${metaText} | ✅ Done! Press Play to run again.`);
     }
   }, []);
 
@@ -168,19 +197,16 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   const getAlgorithmGenerator = useCallback(() => {
     const config = MOUNTAIN_CONFIGS[mountainSize];
     const range = config.range;
-    const scale = config.scale;
+    const scale = 1.0; // Not used in hill climbing, but kept for consistency
     const STEP_SIZE = 0.15;
     const fitnessFn = getFitnessFunction(mountainSize);
 
-    switch (selectedAlgo) {
-      case 'hillClimbing':
-        return hillClimbingGenerator(STEP_SIZE, range, scale, fitnessFn);
-      case 'hillClimbingRestart':
-        return hillClimbingRestartGenerator(STEP_SIZE, restarts, range, scale, fitnessFn);
-      default:
-        return getGenerator('optimization', selectedAlgo, []);
-    }
-  }, [selectedAlgo, mountainSize, restarts]);
+    // Update the renderer's fitness function to match
+    setFitnessFunction(fitnessFn);
+
+    // Unified hill climbing with restarts
+    return hillClimbingGenerator(STEP_SIZE, restarts, range, scale, fitnessFn);
+  }, [mountainSize, restarts]);
 
   // ─── Start Algorithm ───
   const startAlgorithm = useCallback(() => {
@@ -247,6 +273,8 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   useEffect(() => {
     if (!canvasRef.current) return;
     const config = MOUNTAIN_CONFIGS[mountainSize];
+    const fitnessFn = getFitnessFunction(mountainSize);
+    setFitnessFunction(fitnessFn);
     rebuildTerrain(canvasRef.current, config.range, config.resolution);
     fullReset();
   }, [mountainSize, fullReset]);
@@ -269,8 +297,6 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
       engineRef.current.play(SPEED_MAP[speed]);
     }
   }, [speed, playState]);
-
-  const hasParameters = selectedAlgo === 'hillClimbingRestart';
 
   return (
     <div
@@ -334,17 +360,14 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
             </select>
           </div>
 
-          {/* Algorithm Selector */}
+          {/* Algorithm Selector (Only one for now) */}
           <div>
             <label style={{ marginRight: '6px', fontWeight: 'bold', color: '#94a3b8', fontSize: '12px' }}>
               Algo:
             </label>
             <select
               value={selectedAlgo}
-              onChange={(e) => {
-                setSelectedAlgo(e.target.value);
-                setShowDetails(false);
-              }}
+              onChange={() => {}} // No-op for now
               style={{
                 padding: '4px 8px',
                 borderRadius: '6px',
@@ -352,9 +375,10 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
                 color: '#e2e8f0',
                 border: '1px solid #334155',
                 fontSize: '12px',
-                cursor: 'pointer',
+                cursor: 'default',
+                opacity: 0.7,
               }}
-              disabled={playState === 'playing'}
+              disabled
             >
               {algorithmIds.map((id) => (
                 <option key={id} value={id}>
@@ -463,54 +487,43 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
         </div>
 
         {/* ─── RIGHT SIDE: Algorithm Parameters ─── */}
-        {hasParameters && (
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '12px',
-              alignItems: 'center',
-              borderLeft: '1px solid #1e293b',
-              paddingLeft: '12px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Restarts:</span>
-              <select
-                value={restarts}
-                onChange={(e) => setRestarts(parseInt(e.target.value))}
-                disabled={playState === 'playing'}
-                style={{
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  background: '#0f172a',
-                  color: '#e2e8f0',
-                  border: '1px solid #334155',
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '12px',
+            alignItems: 'center',
+            borderLeft: '1px solid #1e293b',
+            paddingLeft: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Restarts:</span>
+            <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
+              {[1, 5, 10, 20].map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setRestarts(value)}
+                  disabled={playState === 'playing'}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: restarts === value ? '#38bdf8' : 'transparent',
+                    color: restarts === value ? '#0a0e1a' : '#94a3b8',
+                    fontSize: '11px',
+                    fontWeight: restarts === value ? 'bold' : 'normal',
+                    cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    opacity: playState === 'playing' ? 0.5 : 1,
+                  }}
+                >
+                  {value}
+                </button>
+              ))}
             </div>
           </div>
-        )}
-
-        {!hasParameters && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              borderLeft: '1px solid #1e293b',
-              paddingLeft: '12px',
-            }}
-          >
-            <span style={{ fontSize: '11px', color: '#64748b' }}>⚙️ No parameters</span>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* ─── MAIN AREA: 3D Canvas ─── */}
@@ -566,7 +579,7 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
           flexShrink: 0,
         }}
       >
-        {metadata || 'Select an algorithm and press Play!'}
+        {metadata || 'Select a size and press Play!'}
       </div>
 
       {/* ─── DETAILS POPUP ─── */}

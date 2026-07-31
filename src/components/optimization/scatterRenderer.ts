@@ -3,16 +3,18 @@ import * as THREE from 'three';
 import type { VisualizationState, Point } from '../../core/types';
 
 // ─── Constants ───
-const TERRAIN_SCALE_Y = 1.8;
+const TERRAIN_SCALE_Y = 2.0; // Vertical exaggeration – taller peaks
 const DOT_RADIUS = 0.12;
 const STAR_RADIUS = 0.22;
 const CAMERA_RADIUS = 17;
 
-// This is the ONLY fitness function used by the renderer. 
-// Algorithms will use the SAME function to ensure consistency.
-const fitnessFunction = (x: number, y: number): number => {
-  return Math.sin(x) * Math.cos(y) * Math.exp(-Math.sqrt(x * x + y * y) / 4);
-};
+// ─── Mutable fitness function (default placeholder) ───
+let activeFitnessFn: (x: number, y: number) => number = (x, y) =>
+  Math.sin(x) * Math.cos(y) * Math.exp(-Math.sqrt(x * x + y * y) / 4);
+
+export function setFitnessFunction(fn: (x: number, y: number) => number): void {
+  activeFitnessFn = fn;
+}
 
 // ─── Renderer State ───
 interface RendererState {
@@ -77,7 +79,7 @@ function buildTerrain(range: number, resolution: number): THREE.Mesh {
   for (let i = 0; i < positions.length / 3; i++) {
     const wx = positions[i * 3];
     const wz = positions[i * 3 + 2];
-    const v = fitnessFunction(wx, wz);
+    const v = activeFitnessFn(wx, wz);
     positions[i * 3 + 1] = v * TERRAIN_SCALE_Y;
     const [r, g, b] = fitnessToColor(v);
     colors[i * 3] = r;
@@ -105,7 +107,7 @@ function buildWireframe(range: number, resolution: number): THREE.Mesh {
 
   const pos = geo.attributes.position.array as Float32Array;
   for (let i = 0; i < pos.length / 3; i++) {
-    pos[i * 3 + 1] = fitnessFunction(pos[i * 3], pos[i * 3 + 2]) * TERRAIN_SCALE_Y + 0.005;
+    pos[i * 3 + 1] = activeFitnessFn(pos[i * 3], pos[i * 3 + 2]) * TERRAIN_SCALE_Y + 0.005;
   }
   geo.attributes.position.needsUpdate = true;
 
@@ -132,7 +134,7 @@ function updateCamera(state: RendererState): void {
 
 // ─── Point to World ───
 function pointToWorld(x: number, y: number): THREE.Vector3 {
-  const sceneY = fitnessFunction(x, y) * TERRAIN_SCALE_Y + 0.18;
+  const sceneY = activeFitnessFn(x, y) * TERRAIN_SCALE_Y + 0.18;
   return new THREE.Vector3(x, sceneY, y);
 }
 

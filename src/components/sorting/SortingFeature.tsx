@@ -25,8 +25,8 @@ const SPEED_MAP: Record<SpeedOption, number> = {
 };
 
 const featureDisplayNames: Record<Feature, string> = {
-  sorting: '🔵 Sorting',
-  optimization: '🧠 Optimization',
+  sorting: 'Sorting',
+  optimization: 'Optimization',
 };
 
 interface SortingFeatureProps {
@@ -811,7 +811,7 @@ const SortingFeature: React.FC<SortingFeatureProps> = ({
                     onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#38bdf8')}
                     onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#475569')}
                   >
-                    📖 Details
+                    Details
                   </button>
                 </div>
                 <div style={{ fontSize: '12px', color: '#94a3b8', fontFamily: 'monospace' }}>
@@ -1002,7 +1002,7 @@ const SortingFeature: React.FC<SortingFeatureProps> = ({
                     onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#38bdf8')}
                     onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#475569')}
                   >
-                    📖 Details
+                    Details
                   </button>
                   {leftFinished.current && (
                     <span style={{ fontSize: '10px', color: '#4ade80', fontWeight: 'bold' }}>✅</span>
@@ -1177,7 +1177,7 @@ const SortingFeature: React.FC<SortingFeatureProps> = ({
                     onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#38bdf8')}
                     onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#475569')}
                   >
-                    📖 Details
+                    Details
                   </button>
                   {rightFinished.current && (
                     <span style={{ fontSize: '10px', color: '#4ade80', fontWeight: 'bold' }}>✅</span>
