@@ -8,7 +8,7 @@ const DOT_RADIUS = 0.12;
 const STAR_RADIUS = 0.22;
 const CAMERA_RADIUS = 17;
 
-// This is the ONLY fitness function used by the renderer.
+// This is the ONLY fitness function used by the renderer. 
 // Algorithms will use the SAME function to ensure consistency.
 const fitnessFunction = (x: number, y: number): number => {
   return Math.sin(x) * Math.cos(y) * Math.exp(-Math.sqrt(x * x + y * y) / 4);
