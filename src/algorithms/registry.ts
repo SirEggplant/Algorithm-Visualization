@@ -6,13 +6,14 @@ import { bubbleSortGenerator, BUBBLE_SORT_INFO } from './sorting/bubbleSort';
 import { mergeSortGenerator, MERGE_SORT_INFO } from './sorting/mergeSort';
 import { quickSortGenerator, QUICK_SORT_INFO } from './sorting/quickSort';
 import { insertionSortGenerator, INSERTION_SORT_INFO } from './sorting/insertionSort';
-import { timsortGenerator, TIMSORT_INFO } from './sorting/timsort';
-import { introsortGenerator, INTROSORT_INFO } from './sorting/introsort';
+import { timsortGenerator, TIMSORT_INFO } from './sorting/timSort';
+import { introsortGenerator, INTROSORT_INFO } from './sorting/introSort';
 
 // ─── Optimization Algorithms ───
 import { hillClimbingGenerator, HILL_CLIMBING_INFO } from './optimization/hillClimbing';
-import { hillClimbingRestartGenerator, HILL_CLIMBING_RESTART_INFO } from './optimization/hillClimbingRestart';
-// ─── Types ───
+import { simulatedAnnealingGenerator, SIMULATED_ANNEALING_INFO } from './optimization/simulatedAnnealing';
+import { geneticAlgorithmGenerator, GENETIC_ALGORITHM_INFO } from './optimization/geneticAlgorithm';
+import { particleSwarmGenerator, PARTICLE_SWARM_INFO } from './optimization/particleSwarm';// ─── Types ───
 export type Feature = 'sorting' | 'optimization';
 
 type AlgorithmEntry = {
@@ -71,19 +72,31 @@ const algorithmRegistry: Record<Feature, Record<string, AlgorithmEntry>> = {
   },
   
   optimization: {
-    hillClimbing: {
-      id: 'hillClimbing',
-      displayName: '⛰️ Hill Climbing (Basic)',
-      generator: hillClimbingGenerator as any,
-      info: HILL_CLIMBING_INFO,
-    },
-    hillClimbingRestart: {
-      id: 'hillClimbingRestart',
-      displayName: '⛰️ Hill Climbing (Restarts)',
-      generator: hillClimbingRestartGenerator as any,
-      info: HILL_CLIMBING_RESTART_INFO,
-    },
+  hillClimbing: {
+    id: 'hillClimbing',
+    displayName: '⛰️ Hill Climbing',
+    generator: hillClimbingGenerator as any,
+    info: HILL_CLIMBING_INFO,
   },
+  simulatedAnnealing: {
+    id: 'simulatedAnnealing',
+    displayName: '🔥 Simulated Annealing',
+    generator: simulatedAnnealingGenerator as any,
+    info: SIMULATED_ANNEALING_INFO,
+  },
+  geneticAlgorithm: {
+    id: 'geneticAlgorithm',
+    displayName: '🧬 Genetic Algorithm',
+    generator: geneticAlgorithmGenerator as any,
+    info: GENETIC_ALGORITHM_INFO,
+  },
+  particleSwarm: {
+    id: 'particleSwarm',
+    displayName: '🐝 Particle Swarm',
+    generator: particleSwarmGenerator as any,
+    info: PARTICLE_SWARM_INFO,
+  },
+},
   
 };
 

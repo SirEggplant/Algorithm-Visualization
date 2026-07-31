@@ -18,6 +18,9 @@ import {
   getDefaultAlgorithm,
 } from '../../algorithms/registry';
 import { hillClimbingGenerator } from '../../algorithms/optimization/hillClimbing';
+import { simulatedAnnealingGenerator, SIMULATED_ANNEALING_INFO } from '../../algorithms/optimization/simulatedAnnealing';
+import { geneticAlgorithmGenerator, GENETIC_ALGORITHM_INFO } from '../../algorithms/optimization/geneticAlgorithm';
+import { particleSwarmGenerator, PARTICLE_SWARM_INFO } from '../../algorithms/optimization/particleSwarm';
 
 type Feature = 'sorting' | 'optimization';
 type PlayState = 'idle' | 'playing' | 'paused';
@@ -116,7 +119,7 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   const engineRef = useRef<VisualizerEngine>(new VisualizerEngine());
 
   // ─── Core State ───
-  const [selectedAlgo] = useState<string>(getDefaultAlgorithm('optimization')); // Only one algorithm for now
+  const [selectedAlgo, setSelectedAlgo] = useState<string>(getDefaultAlgorithm('optimization'));
   const [mountainSize, setMountainSize] = useState<MountainSize>('medium');
   const [playState, setPlayState] = useState<PlayState>('idle');
   const [speed, setSpeed] = useState<SpeedOption>('normal');
@@ -130,6 +133,13 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
 
   // ─── Algorithm Parameters ───
   const [restarts, setRestarts] = useState<number>(1);
+  const [initialTemp, setInitialTemp] = useState<number>(100);
+  const [coolingSchedule, setCoolingSchedule] = useState<'fast' | 'medium' | 'slow'>('medium');
+  const [popSize, setPopSize] = useState<number>(50);
+  const [mutationRate, setMutationRate] = useState<number>(0.1);
+  const [inertia, setInertia] = useState<number>(0.7);
+  const [cognitive, setCognitive] = useState<number>(1.4);
+  const [social, setSocial] = useState<number>(1.4);
 
   const algorithmIds = getAlgorithmIds('optimization');
   const currentAlgoInfo = getInfo('optimization', selectedAlgo);
@@ -197,16 +207,21 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   const getAlgorithmGenerator = useCallback(() => {
     const config = MOUNTAIN_CONFIGS[mountainSize];
     const range = config.range;
-    const scale = 1.0; // Not used in hill climbing, but kept for consistency
-    const STEP_SIZE = 0.15;
     const fitnessFn = getFitnessFunction(mountainSize);
 
-    // Update the renderer's fitness function to match
-    setFitnessFunction(fitnessFn);
-
-    // Unified hill climbing with restarts
-    return hillClimbingGenerator(STEP_SIZE, restarts, range, scale, fitnessFn);
-  }, [mountainSize, restarts]);
+    switch (selectedAlgo) {
+      case 'hillClimbing':
+        return hillClimbingGenerator(0.15, restarts, range, 1.0, fitnessFn);
+      case 'simulatedAnnealing':
+        return simulatedAnnealingGenerator(initialTemp, coolingSchedule, range, fitnessFn);
+      case 'geneticAlgorithm':
+        return geneticAlgorithmGenerator(popSize, mutationRate, range, fitnessFn);
+      case 'particleSwarm':
+        return particleSwarmGenerator(popSize, inertia, cognitive, social, range, fitnessFn);
+      default:
+        return getGenerator('optimization', selectedAlgo, []);
+    }
+  }, [selectedAlgo, mountainSize, restarts, initialTemp, coolingSchedule, popSize, mutationRate, inertia, cognitive, social]);
 
   // ─── Start Algorithm ───
   const startAlgorithm = useCallback(() => {
@@ -360,14 +375,15 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
             </select>
           </div>
 
-          {/* Algorithm Selector (Only one for now) */}
+          {/* Algorithm Selector */}
           <div>
             <label style={{ marginRight: '6px', fontWeight: 'bold', color: '#94a3b8', fontSize: '12px' }}>
               Algo:
             </label>
             <select
               value={selectedAlgo}
-              onChange={() => {}} // No-op for now
+              onChange={(e) => setSelectedAlgo(e.target.value)}
+              disabled={playState === 'playing'}
               style={{
                 padding: '4px 8px',
                 borderRadius: '6px',
@@ -375,10 +391,9 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
                 color: '#e2e8f0',
                 border: '1px solid #334155',
                 fontSize: '12px',
-                cursor: 'default',
-                opacity: 0.7,
+                cursor: 'pointer',
+                opacity: playState === 'playing' ? 0.6 : 1,
               }}
-              disabled
             >
               {algorithmIds.map((id) => (
                 <option key={id} value={id}>
@@ -497,32 +512,199 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
             paddingLeft: '12px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '11px', color: '#94a3b8' }}>Restarts:</span>
-            <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
-              {[1, 5, 10, 20].map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setRestarts(value)}
+          {/* ─── Hill Climbing: Restarts ─── */}
+          {selectedAlgo === 'hillClimbing' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Restarts:</span>
+              <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
+                {[1, 5, 10, 20].map((value) => (
+                  <button
+                    key={value}
+                    onClick={() => setRestarts(value)}
+                    disabled={playState === 'playing'}
+                    style={{
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      background: restarts === value ? '#38bdf8' : 'transparent',
+                      color: restarts === value ? '#0a0e1a' : '#94a3b8',
+                      fontSize: '11px',
+                      fontWeight: restarts === value ? 'bold' : 'normal',
+                      cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s',
+                      opacity: playState === 'playing' ? 0.5 : 1,
+                    }}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ─── Simulated Annealing: Temperature & Cooling ─── */}
+          {selectedAlgo === 'simulatedAnnealing' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>Init Temp:</span>
+                <input
+                  type="number"
+                  value={initialTemp}
+                  onChange={(e) => setInitialTemp(Number(e.target.value))}
                   disabled={playState === 'playing'}
                   style={{
-                    padding: '3px 8px',
+                    width: '46px',
+                    padding: '2px 4px',
                     borderRadius: '4px',
-                    border: 'none',
-                    background: restarts === value ? '#38bdf8' : 'transparent',
-                    color: restarts === value ? '#0a0e1a' : '#94a3b8',
+                    background: '#0f172a',
+                    color: '#e2e8f0',
+                    border: '1px solid #334155',
                     fontSize: '11px',
-                    fontWeight: restarts === value ? 'bold' : 'normal',
-                    cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                    opacity: playState === 'playing' ? 0.5 : 1,
                   }}
-                >
-                  {value}
-                </button>
-              ))}
-            </div>
-          </div>
+                  min={10}
+                  max={500}
+                  step={10}
+                />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>Cooling:</span>
+                <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
+                  {(['fast', 'medium', 'slow'] as const).map((schedule) => (
+                    <button
+                      key={schedule}
+                      onClick={() => setCoolingSchedule(schedule)}
+                      disabled={playState === 'playing'}
+                      style={{
+                        padding: '3px 6px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: coolingSchedule === schedule ? '#38bdf8' : 'transparent',
+                        color: coolingSchedule === schedule ? '#0a0e1a' : '#94a3b8',
+                        fontSize: '10px',
+                        fontWeight: coolingSchedule === schedule ? 'bold' : 'normal',
+                        cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: playState === 'playing' ? 0.5 : 1,
+                      }}
+                    >
+                      {schedule === 'fast' ? 'Fast' : schedule === 'medium' ? 'Med' : 'Slow'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ─── Genetic Algorithm: Population & Mutation ─── */}
+          {selectedAlgo === 'geneticAlgorithm' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>Pop:</span>
+                <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
+                  {[20, 50, 100].map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => setPopSize(value)}
+                      disabled={playState === 'playing'}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: popSize === value ? '#38bdf8' : 'transparent',
+                        color: popSize === value ? '#0a0e1a' : '#94a3b8',
+                        fontSize: '11px',
+                        fontWeight: popSize === value ? 'bold' : 'normal',
+                        cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: playState === 'playing' ? 0.5 : 1,
+                      }}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>Mut:</span>
+                <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
+                  {[0.01, 0.05, 0.1, 0.2].map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => setMutationRate(value)}
+                      disabled={playState === 'playing'}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: mutationRate === value ? '#38bdf8' : 'transparent',
+                        color: mutationRate === value ? '#0a0e1a' : '#94a3b8',
+                        fontSize: '11px',
+                        fontWeight: mutationRate === value ? 'bold' : 'normal',
+                        cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: playState === 'playing' ? 0.5 : 1,
+                      }}
+                    >
+                      {value === 0.01 ? '1%' : value === 0.05 ? '5%' : value === 0.1 ? '10%' : '20%'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ─── Particle Swarm: Population & Inertia ─── */}
+          {selectedAlgo === 'particleSwarm' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>Pop:</span>
+                <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
+                  {[20, 50, 100].map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => setPopSize(value)}
+                      disabled={playState === 'playing'}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: popSize === value ? '#38bdf8' : 'transparent',
+                        color: popSize === value ? '#0a0e1a' : '#94a3b8',
+                        fontSize: '11px',
+                        fontWeight: popSize === value ? 'bold' : 'normal',
+                        cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: playState === 'playing' ? 0.5 : 1,
+                      }}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>Inertia:</span>
+                <input
+                  type="number"
+                  value={inertia}
+                  onChange={(e) => setInertia(Number(e.target.value))}
+                  disabled={playState === 'playing'}
+                  style={{
+                    width: '38px',
+                    padding: '2px 4px',
+                    borderRadius: '4px',
+                    background: '#0f172a',
+                    color: '#e2e8f0',
+                    border: '1px solid #334155',
+                    fontSize: '11px',
+                  }}
+                  min={0.1}
+                  max={1.0}
+                  step={0.1}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
