@@ -23,15 +23,6 @@ const clampPoint = (p: Point, range: number): Point => ({
   y: Math.min(range, Math.max(-range, p.y)),
 });
 
-/**
- * Hill Climbing with configurable restarts.
- * 
- * @param stepSize - How far to move each step (default: 0.15)
- * @param restarts - Number of attempts (1 = basic, 5, 10, 20)
- * @param range - The bounds of the search space
- * @param scale - Vertical scaling of the terrain
- * @param fitnessFunction - The function to optimize
- */
 export function* hillClimbingGenerator(
   stepSize: number = 0.15,
   restarts: number = 1,
@@ -42,7 +33,6 @@ export function* hillClimbingGenerator(
   const rangeVal = range;
   fitnessFn = fitnessFunction;
 
-  // ─── Store all peaks found across all restarts ───
   const allPeaks: Point[] = [];
   let bestOverall: Point | null = null;
   let bestOverallFitness = -Infinity;
@@ -50,7 +40,6 @@ export function* hillClimbingGenerator(
   let globalStepCount = 0;
 
   for (let restart = 0; restart < restarts; restart++) {
-    // ─── Start at a random position ───
     let current = randomPoint(rangeVal);
     let currentFitness = fitnessFn(current.x, current.y);
     let improved = true;
@@ -58,7 +47,7 @@ export function* hillClimbingGenerator(
     const climbPath: Point[] = [current];
     let localStepCount = 0;
 
-    // ─── Show the starting point ───
+    // Show starting point
     const initialHighlights: Point[] = [];
     if (bestOverall) initialHighlights.push(bestOverall);
     for (const peak of allPeaks) {
@@ -70,15 +59,15 @@ export function* hillClimbingGenerator(
       data: allVisitedPoints.concat(climbPath),
       highlights: { coordinates: initialHighlights.concat([current]) },
       metadata: {
-        generation: restart + 1,
+        generation: 0,
         fitness: bestOverallFitness,
-        action: restarts > 1 
+        action: restarts > 1
           ? `Restart ${restart + 1}/${restarts} | Starting`
           : `Starting climb`,
       },
     };
 
-    // ─── Greedy ascent until stuck at a local peak ───
+    // Greedy ascent until stuck
     while (improved) {
       improved = false;
       localStepCount++;
@@ -117,13 +106,11 @@ export function* hillClimbingGenerator(
         climbPath.push(current);
         improved = true;
 
-        // ─── Yield after each successful step ───
         const stepHighlights: Point[] = [];
         if (bestOverall) stepHighlights.push(bestOverall);
         for (const peak of allPeaks) {
           if (peak !== bestOverall) stepHighlights.push(peak);
         }
-        // Add the current position (will be gold/red depending on best)
         stepHighlights.push(current);
 
         yield {
@@ -131,7 +118,7 @@ export function* hillClimbingGenerator(
           data: allVisitedPoints.concat(climbPath),
           highlights: { coordinates: stepHighlights },
           metadata: {
-            generation: restart + 1,
+            generation: localStepCount,
             fitness: bestOverallFitness,
             action: restarts > 1
               ? `Restart ${restart + 1}/${restarts} | Step ${localStepCount} | Fitness: ${currentFitness.toFixed(4)}`
@@ -141,7 +128,7 @@ export function* hillClimbingGenerator(
       }
     }
 
-    // ─── Reached a local peak ───
+    // Reached a local peak
     allPeaks.push(current);
     allVisitedPoints = allVisitedPoints.concat(climbPath);
 
@@ -150,7 +137,6 @@ export function* hillClimbingGenerator(
       bestOverall = current;
     }
 
-    // ─── Yield at the end of this restart ───
     const restartHighlights: Point[] = [];
     if (bestOverall) restartHighlights.push(bestOverall);
     for (const peak of allPeaks) {
@@ -163,7 +149,7 @@ export function* hillClimbingGenerator(
         data: allVisitedPoints,
         highlights: { coordinates: restartHighlights },
         metadata: {
-          generation: restart + 1,
+          generation: localStepCount,
           fitness: bestOverallFitness,
           action: `Restart ${restart + 1}/${restarts} complete! Peak fitness: ${currentFitness.toFixed(4)}`,
         },
@@ -171,7 +157,7 @@ export function* hillClimbingGenerator(
     }
   }
 
-  // ─── FINAL YIELD ───
+  // Final yield
   const finalHighlights: Point[] = [];
   if (bestOverall) finalHighlights.push(bestOverall);
   for (const peak of allPeaks) {
@@ -187,10 +173,10 @@ export function* hillClimbingGenerator(
     data: allVisitedPoints,
     highlights: { coordinates: finalHighlights },
     metadata: {
-      generation: restarts,
+      generation: globalStepCount,
       fitness: bestOverallFitness,
       action: completionMessage,
-      final: true, // 👈 Only on the very last yield
+      final: true,
     },
   };
 }

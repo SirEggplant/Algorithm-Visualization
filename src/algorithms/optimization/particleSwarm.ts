@@ -35,14 +35,13 @@ export function* particleSwarmGenerator(
   inertia: number = 0.7,
   cognitive: number = 1.4,
   social: number = 1.4,
+  generations: number = 100,
   range: number = 6,
   fitnessFunction: (x: number, y: number) => number = fitnessFn
 ): AlgorithmGenerator {
   fitnessFn = fitnessFunction;
   const rangeVal = range;
-  const generations = 100;
 
-  // ─── Initialize particles ───
   let particles: Particle[] = [];
   let globalBest: Point | null = null;
   let globalBestFitness = -Infinity;
@@ -64,9 +63,7 @@ export function* particleSwarmGenerator(
   }
 
   for (let gen = 0; gen < generations; gen++) {
-    // ─── Update particles ───
     for (const p of particles) {
-      // Update velocity
       const r1 = Math.random();
       const r2 = Math.random();
       p.velocity.x = inertia * p.velocity.x +
@@ -76,17 +73,14 @@ export function* particleSwarmGenerator(
         cognitive * r1 * (p.bestPosition.y - p.position.y) +
         social * r2 * (globalBest!.y - p.position.y);
 
-      // Clamp velocity to prevent wild jumps
       const maxVel = 0.5;
       p.velocity.x = Math.min(maxVel, Math.max(-maxVel, p.velocity.x));
       p.velocity.y = Math.min(maxVel, Math.max(-maxVel, p.velocity.y));
 
-      // Update position
       p.position.x += p.velocity.x;
       p.position.y += p.velocity.y;
       p.position = clampPoint(p.position, rangeVal);
 
-      // Evaluate
       const fitness = fitnessFn(p.position.x, p.position.y);
       if (fitness > p.bestFitness) {
         p.bestFitness = fitness;
@@ -98,7 +92,6 @@ export function* particleSwarmGenerator(
       }
     }
 
-    // ─── Yield state ───
     const positions = particles.map(p => p.position);
     yield {
       type: 'scatter',
@@ -112,7 +105,6 @@ export function* particleSwarmGenerator(
     };
   }
 
-  // ─── Final yield ───
   const positions = particles.map(p => p.position);
   yield {
     type: 'scatter',

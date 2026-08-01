@@ -23,7 +23,6 @@ const clampPoint = (p: Point, range: number): Point => ({
   y: Math.min(range, Math.max(-range, p.y)),
 });
 
-// Crossover: Blend two parents
 const crossover = (p1: Point, p2: Point): Point => {
   const alpha = Math.random();
   return {
@@ -32,7 +31,6 @@ const crossover = (p1: Point, p2: Point): Point => {
   };
 };
 
-// Mutation: Add Gaussian noise
 const mutate = (p: Point, rate: number, range: number): Point => {
   if (Math.random() < rate) {
     p.x += (Math.random() - 0.5) * 0.5;
@@ -44,24 +42,21 @@ const mutate = (p: Point, rate: number, range: number): Point => {
 export function* geneticAlgorithmGenerator(
   popSize: number = 50,
   mutationRate: number = 0.1,
+  generations: number = 100,
   range: number = 6,
   fitnessFunction: (x: number, y: number) => number = fitnessFn
 ): AlgorithmGenerator {
   fitnessFn = fitnessFunction;
   const rangeVal = range;
-  const generations = 100; // Fixed for now, but could be made configurable
 
-  // ─── Initialize population ───
   let population: Point[] = Array.from({ length: popSize }, () => randomPoint(rangeVal));
 
   for (let gen = 0; gen < generations; gen++) {
-    // ─── Evaluate fitness ───
     const fitnesses = population.map(p => fitnessFn(p.x, p.y));
     const bestIdx = fitnesses.indexOf(Math.max(...fitnesses));
     const best = population[bestIdx];
     const bestFitness = fitnesses[bestIdx];
 
-    // ─── Yield current state ───
     yield {
       type: 'scatter',
       data: population,
@@ -73,13 +68,10 @@ export function* geneticAlgorithmGenerator(
       },
     };
 
-    // ─── Selection (Tournament) ───
     const nextPopulation: Point[] = [];
-    // Elitism: keep the best
     nextPopulation.push({ ...best });
 
     while (nextPopulation.length < popSize) {
-      // Tournament selection: pick 3 random individuals, keep the fittest
       const tournament = () => {
         const idx1 = Math.floor(Math.random() * popSize);
         const idx2 = Math.floor(Math.random() * popSize);
@@ -102,11 +94,11 @@ export function* geneticAlgorithmGenerator(
     population = nextPopulation;
   }
 
-  // ─── Final yield ───
   const finalFitnesses = population.map(p => fitnessFn(p.x, p.y));
   const bestIdx = finalFitnesses.indexOf(Math.max(...finalFitnesses));
   const best = population[bestIdx];
   const bestFitness = finalFitnesses[bestIdx];
+
   yield {
     type: 'scatter',
     data: population,

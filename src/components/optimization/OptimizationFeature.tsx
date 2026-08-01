@@ -18,9 +18,9 @@ import {
   getDefaultAlgorithm,
 } from '../../algorithms/registry';
 import { hillClimbingGenerator } from '../../algorithms/optimization/hillClimbing';
-import { simulatedAnnealingGenerator, SIMULATED_ANNEALING_INFO } from '../../algorithms/optimization/simulatedAnnealing';
-import { geneticAlgorithmGenerator, GENETIC_ALGORITHM_INFO } from '../../algorithms/optimization/geneticAlgorithm';
-import { particleSwarmGenerator, PARTICLE_SWARM_INFO } from '../../algorithms/optimization/particleSwarm';
+import { simulatedAnnealingGenerator } from '../../algorithms/optimization/simulatedAnnealing';
+import { geneticAlgorithmGenerator } from '../../algorithms/optimization/geneticAlgorithm';
+import { particleSwarmGenerator } from '../../algorithms/optimization/particleSwarm';
 
 type Feature = 'sorting' | 'optimization';
 type PlayState = 'idle' | 'playing' | 'paused';
@@ -47,23 +47,14 @@ const MOUNTAIN_CONFIGS: Record<MountainSize, { range: number; resolution: number
   xlarge: { range: 10, resolution: 110 },
 };
 
-// ─── 4 UNIQUE MOUNTAIN RANGES (Inspired by Real Geology) ───
+// ─── 4 UNIQUE MOUNTAIN RANGES ───
 const fitnessFunctions = {
-  /**
-   * SMALL: Mount Monadnock / Table Mountain
-   * A single dominant, steep peak with gentle rolling foothills.
-   */
   small: (x: number, y: number): number => {
     const mainPeak = 1.2 * Math.exp(-((x * x + y * y) / 0.9));
     const foothills = 0.3 * Math.sin(x * 0.7 + 0.5) * Math.cos(y * 0.8 - 0.3);
     const secondary = 0.4 * Math.exp(-(((x + 1.8) ** 2 + (y - 1.2) ** 2) / 1.5));
     return mainPeak + secondary + foothills + 0.1;
   },
-
-  /**
-   * MEDIUM: The Rocky Mountains / The Alps
-   * Multiple sharp, distinct peaks with a prominent ridge line.
-   */
   medium: (x: number, y: number): number => {
     const peak1 = 1.8 * Math.exp(-(((x - 1.5) ** 2 + (y - 0.5) ** 2) / 0.8));
     const peak2 = 1.5 * Math.exp(-(((x + 2.0) ** 2 + (y + 1.0) ** 2) / 0.7));
@@ -71,11 +62,6 @@ const fitnessFunctions = {
     const ridge = 0.6 * Math.sin(x * 0.5 + 0.2) * Math.cos(y * 0.4 + 0.8) + 0.3;
     return peak1 + peak2 + peak3 + ridge + 0.2;
   },
-
-  /**
-   * LARGE: The Himalayas
-   * A massive, high-altitude plateau with 3 colossal, jagged peaks.
-   */
   large: (x: number, y: number): number => {
     const plateau = 0.8 * Math.exp(-((y * y) / 6)) * (1.2 + 0.5 * Math.sin(x * 0.6 + 0.3));
     const peak1 = 3.0 * Math.exp(-(((x - 2.5) ** 2 + (y - 1.5) ** 2) / 0.6));
@@ -84,11 +70,6 @@ const fitnessFunctions = {
     const ridge = 0.8 * Math.sin(x * 0.4 + 1.2) * Math.cos(y * 0.5 - 0.7);
     return plateau + peak1 + peak2 + peak3 + ridge + 0.3;
   },
-
-  /**
-   * X-LARGE: The Andes / Patagonia
-   * A highly jagged, elongated mountain range with 7+ sharp peaks running diagonally.
-   */
   xlarge: (x: number, y: number): number => {
     const spine = 1.2 * Math.exp(-((y * y) / 4)) * (1.8 + 0.7 * Math.sin(x * 1.5 + 0.5) + 0.5 * Math.cos(x * 2.3 - 0.8));
     const p1 = 3.5 * Math.exp(-(((x - 3.5) ** 2 + (y - 1.5) ** 2) / 0.5));
@@ -138,8 +119,9 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   const [popSize, setPopSize] = useState<number>(50);
   const [mutationRate, setMutationRate] = useState<number>(0.1);
   const [inertia, setInertia] = useState<number>(0.7);
-  const [cognitive, setCognitive] = useState<number>(1.4);
-  const [social, setSocial] = useState<number>(1.4);
+  const [cognitive] = useState<number>(1.4);
+  const [social] = useState<number>(1.4);
+  const [generations, setGenerations] = useState<number>(100);
 
   const algorithmIds = getAlgorithmIds('optimization');
   const currentAlgoInfo = getInfo('optimization', selectedAlgo);
@@ -175,6 +157,11 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
     drawMountain();
   }, [drawMountain]);
 
+  // ─── Auto-reset when algorithm changes ───
+  useEffect(() => {
+    fullReset();
+  }, [selectedAlgo, fullReset]);
+
   // ─── Update display ───
   const updateUIWithState = useCallback((state: VisualizationState) => {
     if (!canvasRef.current) return;
@@ -195,7 +182,6 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
     }
     setMetadata(metaText);
 
-    // Stop only when final flag is true (only on the last yield)
     if (m.final === true) {
       isFinished.current = true;
       setPlayState('idle');
@@ -215,13 +201,13 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
       case 'simulatedAnnealing':
         return simulatedAnnealingGenerator(initialTemp, coolingSchedule, range, fitnessFn);
       case 'geneticAlgorithm':
-        return geneticAlgorithmGenerator(popSize, mutationRate, range, fitnessFn);
+        return geneticAlgorithmGenerator(popSize, mutationRate, generations, range, fitnessFn);
       case 'particleSwarm':
-        return particleSwarmGenerator(popSize, inertia, cognitive, social, range, fitnessFn);
+        return particleSwarmGenerator(popSize, inertia, cognitive, social, generations, range, fitnessFn);
       default:
         return getGenerator('optimization', selectedAlgo, []);
     }
-  }, [selectedAlgo, mountainSize, restarts, initialTemp, coolingSchedule, popSize, mutationRate, inertia, cognitive, social]);
+  }, [selectedAlgo, mountainSize, restarts, initialTemp, coolingSchedule, popSize, mutationRate, inertia, cognitive, social, generations]);
 
   // ─── Start Algorithm ───
   const startAlgorithm = useCallback(() => {
@@ -542,29 +528,34 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
             </div>
           )}
 
-          {/* ─── Simulated Annealing: Temperature & Cooling ─── */}
+          {/* ─── Simulated Annealing: Temp & Cooling ─── */}
           {selectedAlgo === 'simulatedAnnealing' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>Init Temp:</span>
-                <input
-                  type="number"
-                  value={initialTemp}
-                  onChange={(e) => setInitialTemp(Number(e.target.value))}
-                  disabled={playState === 'playing'}
-                  style={{
-                    width: '46px',
-                    padding: '2px 4px',
-                    borderRadius: '4px',
-                    background: '#0f172a',
-                    color: '#e2e8f0',
-                    border: '1px solid #334155',
-                    fontSize: '11px',
-                  }}
-                  min={10}
-                  max={500}
-                  step={10}
-                />
+                <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
+                  {[50, 100, 200, 500].map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => setInitialTemp(value)}
+                      disabled={playState === 'playing'}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: initialTemp === value ? '#38bdf8' : 'transparent',
+                        color: initialTemp === value ? '#0a0e1a' : '#94a3b8',
+                        fontSize: '11px',
+                        fontWeight: initialTemp === value ? 'bold' : 'normal',
+                        cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: playState === 'playing' ? 0.5 : 1,
+                      }}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>Cooling:</span>
@@ -595,7 +586,7 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
             </>
           )}
 
-          {/* ─── Genetic Algorithm: Population & Mutation ─── */}
+          {/* ─── Genetic Algorithm: Pop, Mut, Generations ─── */}
           {selectedAlgo === 'geneticAlgorithm' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -650,10 +641,36 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
                   ))}
                 </div>
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>Gen:</span>
+                <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
+                  {[50, 100, 200, 500].map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => setGenerations(value)}
+                      disabled={playState === 'playing'}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: generations === value ? '#38bdf8' : 'transparent',
+                        color: generations === value ? '#0a0e1a' : '#94a3b8',
+                        fontSize: '11px',
+                        fontWeight: generations === value ? 'bold' : 'normal',
+                        cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: playState === 'playing' ? 0.5 : 1,
+                      }}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </>
           )}
 
-          {/* ─── Particle Swarm: Population & Inertia ─── */}
+          {/* ─── Particle Swarm: Pop, Inertia, Generations ─── */}
           {selectedAlgo === 'particleSwarm' && (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -684,24 +701,55 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>Inertia:</span>
-                <input
-                  type="number"
-                  value={inertia}
-                  onChange={(e) => setInertia(Number(e.target.value))}
-                  disabled={playState === 'playing'}
-                  style={{
-                    width: '38px',
-                    padding: '2px 4px',
-                    borderRadius: '4px',
-                    background: '#0f172a',
-                    color: '#e2e8f0',
-                    border: '1px solid #334155',
-                    fontSize: '11px',
-                  }}
-                  min={0.1}
-                  max={1.0}
-                  step={0.1}
-                />
+                <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
+                  {[0.3, 0.5, 0.7, 0.9].map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => setInertia(value)}
+                      disabled={playState === 'playing'}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: inertia === value ? '#38bdf8' : 'transparent',
+                        color: inertia === value ? '#0a0e1a' : '#94a3b8',
+                        fontSize: '11px',
+                        fontWeight: inertia === value ? 'bold' : 'normal',
+                        cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: playState === 'playing' ? 0.5 : 1,
+                      }}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>Gen:</span>
+                <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
+                  {[50, 100, 200, 500].map((value) => (
+                    <button
+                      key={value}
+                      onClick={() => setGenerations(value)}
+                      disabled={playState === 'playing'}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: generations === value ? '#38bdf8' : 'transparent',
+                        color: generations === value ? '#0a0e1a' : '#94a3b8',
+                        fontSize: '11px',
+                        fontWeight: generations === value ? 'bold' : 'normal',
+                        cursor: playState === 'playing' ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s',
+                        opacity: playState === 'playing' ? 0.5 : 1,
+                      }}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
               </div>
             </>
           )}
