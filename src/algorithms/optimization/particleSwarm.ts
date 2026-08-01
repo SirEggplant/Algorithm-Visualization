@@ -31,11 +31,11 @@ type Particle = {
 };
 
 export function* particleSwarmGenerator(
-  popSize: number = 50,
+  popSize: number = 20,
   inertia: number = 0.7,
   cognitive: number = 1.4,
   social: number = 1.4,
-  generations: number = 100,
+  generations: number = 25,
   range: number = 6,
   fitnessFunction: (x: number, y: number) => number = fitnessFn
 ): AlgorithmGenerator {
@@ -45,6 +45,7 @@ export function* particleSwarmGenerator(
   let particles: Particle[] = [];
   let globalBest: Point | null = null;
   let globalBestFitness = -Infinity;
+  let globalBestStep = 0;
 
   for (let i = 0; i < popSize; i++) {
     const pos = randomPoint(rangeVal);
@@ -59,6 +60,7 @@ export function* particleSwarmGenerator(
     if (fitness > globalBestFitness) {
       globalBestFitness = fitness;
       globalBest = { ...pos };
+      globalBestStep = 0;
     }
   }
 
@@ -89,6 +91,7 @@ export function* particleSwarmGenerator(
       if (fitness > globalBestFitness) {
         globalBestFitness = fitness;
         globalBest = { ...p.position };
+        globalBestStep = gen + 1;
       }
     }
 
@@ -100,7 +103,7 @@ export function* particleSwarmGenerator(
       metadata: {
         generation: gen + 1,
         fitness: globalBestFitness,
-        action: `Gen ${gen + 1}/${generations} | Best: ${globalBestFitness.toFixed(4)}`,
+        action: `Gen ${gen + 1}/${generations} | Best found ${globalBestFitness.toFixed(4)} at step ${globalBestStep}`,
       },
     };
   }
@@ -113,7 +116,7 @@ export function* particleSwarmGenerator(
     metadata: {
       generation: generations,
       fitness: globalBestFitness,
-      action: `✅ Complete! Best fitness: ${globalBestFitness.toFixed(4)}`,
+      action: `✅ Complete! Best found ${globalBestFitness.toFixed(4)} at step ${globalBestStep}`,
       final: true,
     },
   };

@@ -39,12 +39,12 @@ const featureDisplayNames: Record<Feature, string> = {
   optimization: 'Optimization',
 };
 
-// ─── Mountain size configurations ───
-const MOUNTAIN_CONFIGS: Record<MountainSize, { range: number; resolution: number }> = {
-  small: { range: 4, resolution: 50 },
-  medium: { range: 6, resolution: 70 },
-  large: { range: 8, resolution: 90 },
-  xlarge: { range: 10, resolution: 110 },
+// ─── ✅ CORRECTED HARDCODED GLOBAL MAXIMA ───
+const MOUNTAIN_CONFIGS: Record<MountainSize, { range: number; resolution: number; globalMax: number }> = {
+  small: { range: 4, resolution: 50, globalMax: 1.4591 },
+  medium: { range: 6, resolution: 70, globalMax: 2.568 },
+  large: { range: 8, resolution: 90, globalMax: 4.8873 },
+  xlarge: { range: 10, resolution: 110, globalMax: 5.0159 },
 };
 
 // ─── 4 UNIQUE MOUNTAIN RANGES ───
@@ -116,15 +116,30 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   const [restarts, setRestarts] = useState<number>(1);
   const [initialTemp, setInitialTemp] = useState<number>(100);
   const [coolingSchedule, setCoolingSchedule] = useState<'fast' | 'medium' | 'slow'>('medium');
-  const [popSize, setPopSize] = useState<number>(50);
+  const [popSize, setPopSize] = useState<number>(20);
   const [mutationRate, setMutationRate] = useState<number>(0.1);
   const [inertia, setInertia] = useState<number>(0.7);
-  const [cognitive] = useState<number>(1.4);
-  const [social] = useState<number>(1.4);
-  const [generations, setGenerations] = useState<number>(100);
+  const [generations, setGenerations] = useState<number>(25);
 
   const algorithmIds = getAlgorithmIds('optimization');
   const currentAlgoInfo = getInfo('optimization', selectedAlgo);
+
+  // ─── HARDCODED global maximum for the current mountain size ───
+  const globalMax = MOUNTAIN_CONFIGS[mountainSize].globalMax;
+
+  // ─── Helper: get the effective speed for the current algorithm ───
+  const getEffectiveSpeed = useCallback((speedOption: SpeedOption, algo: string): number => {
+    if (algo !== 'geneticAlgorithm' && algo !== 'particleSwarm') {
+      return SPEED_MAP[speedOption];
+    }
+    switch (speedOption) {
+      case 'slow':   return 700;
+      case 'normal': return 350;
+      case 'fast':   return 120;
+      case 'turbo':  return 40;
+      default:       return 350;
+    }
+  }, []);
 
   // ─── Draw the mountain ───
   const drawMountain = useCallback(() => {
@@ -138,7 +153,7 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
     drawScatter(canvasRef.current, emptyState);
   }, []);
 
-  // ─── FULL RESET ───
+  // ─── FULL RESET (clears dots, resets state, but does NOT reset camera) ───
   const fullReset = useCallback(() => {
     if (!canvasRef.current) return;
 
@@ -146,16 +161,16 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
     engineRef.current['generator'] = null;
 
     clearScene(canvasRef.current);
-    resetCamera(canvasRef.current);
+    // ❌ REMOVED: resetCamera(canvasRef.current); – camera stays where the user left it
 
     setPlayState('idle');
-    setMetadata('Ready to explore!');
+    setMetadata(`Ready to explore! | Global Max: ${globalMax.toFixed(4)}`);
     stepCount.current = 0;
     bestFitness.current = -Infinity;
     isFinished.current = false;
 
     drawMountain();
-  }, [drawMountain]);
+  }, [drawMountain, globalMax]);
 
   // ─── Auto-reset when algorithm changes ───
   useEffect(() => {
@@ -163,31 +178,37 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   }, [selectedAlgo, fullReset]);
 
   // ─── Update display ───
-  const updateUIWithState = useCallback((state: VisualizationState) => {
-    if (!canvasRef.current) return;
-    drawScatter(canvasRef.current, state);
+const updateUIWithState = useCallback((state: VisualizationState) => {
+  if (!canvasRef.current) return;
+  drawScatter(canvasRef.current, state);
 
-    let metaText = '';
-    const m = state.metadata;
+  let metaText = '';
+  const m = state.metadata;
+
+  // ─── Use the algorithm's action string as the main message ───
+  if (m.action) {
+    metaText = m.action;
+  } else {
+    // Fallback: if no action, show generation and fitness
     if (m.generation !== undefined) {
-      stepCount.current = m.generation;
       metaText = `Step: ${m.generation}`;
     }
     if (m.fitness !== undefined) {
-      bestFitness.current = m.fitness;
-      metaText = metaText ? `${metaText} | Best Fitness: ${m.fitness.toFixed(4)}` : `Best Fitness: ${m.fitness.toFixed(4)}`;
+      metaText = metaText
+        ? `${metaText} | Best Found: ${m.fitness.toFixed(4)}`
+        : `Best Found: ${m.fitness.toFixed(4)}`;
     }
-    if (m.action) {
-      metaText = metaText ? `${metaText} | ${m.action}` : m.action;
-    }
-    setMetadata(metaText);
+  }
 
-    if (m.final === true) {
-      isFinished.current = true;
-      setPlayState('idle');
-      setMetadata(`${metaText} | ✅ Done! Press Play to run again.`);
-    }
-  }, []);
+  // ─── Append the static global max at the end ───
+  metaText = `${metaText} | Global Max: ${globalMax.toFixed(4)}`;
+  setMetadata(metaText);
+
+  if (m.final === true) {
+    isFinished.current = true;
+    setPlayState('idle');
+  }
+}, [globalMax]);
 
   // ─── Get generator ───
   const getAlgorithmGenerator = useCallback(() => {
@@ -203,11 +224,11 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
       case 'geneticAlgorithm':
         return geneticAlgorithmGenerator(popSize, mutationRate, generations, range, fitnessFn);
       case 'particleSwarm':
-        return particleSwarmGenerator(popSize, inertia, cognitive, social, generations, range, fitnessFn);
+        return particleSwarmGenerator(popSize, inertia, 1.4, 1.4, generations, range, fitnessFn);
       default:
         return getGenerator('optimization', selectedAlgo, []);
     }
-  }, [selectedAlgo, mountainSize, restarts, initialTemp, coolingSchedule, popSize, mutationRate, inertia, cognitive, social, generations]);
+  }, [selectedAlgo, mountainSize, restarts, initialTemp, coolingSchedule, popSize, mutationRate, inertia, generations]);
 
   // ─── Start Algorithm ───
   const startAlgorithm = useCallback(() => {
@@ -231,8 +252,9 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
       updateUIWithState(state);
     };
 
-    engineRef.current.play(SPEED_MAP[speed]);
-  }, [speed, updateUIWithState, getAlgorithmGenerator]);
+    const effectiveSpeed = getEffectiveSpeed(speed, selectedAlgo);
+    engineRef.current.play(effectiveSpeed);
+  }, [speed, updateUIWithState, getAlgorithmGenerator, selectedAlgo, getEffectiveSpeed]);
 
   // ─── Pause ───
   const pauseAlgorithm = useCallback(() => {
@@ -243,8 +265,9 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   // ─── Resume ───
   const resumeAlgorithm = useCallback(() => {
     setPlayState('playing');
-    engineRef.current.play(SPEED_MAP[speed]);
-  }, [speed]);
+    const effectiveSpeed = getEffectiveSpeed(speed, selectedAlgo);
+    engineRef.current.play(effectiveSpeed);
+  }, [speed, selectedAlgo, getEffectiveSpeed]);
 
   // ─── Play/Pause/Resume ───
   const handlePlayButtonClick = useCallback(() => {
@@ -277,6 +300,8 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
     const fitnessFn = getFitnessFunction(mountainSize);
     setFitnessFunction(fitnessFn);
     rebuildTerrain(canvasRef.current, config.range, config.resolution);
+    // ✅ Only here we reset the camera (when the terrain changes)
+    resetCamera(canvasRef.current);
     fullReset();
   }, [mountainSize, fullReset]);
 
@@ -295,10 +320,12 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
   useEffect(() => {
     if (playState === 'playing') {
       engineRef.current.pause();
-      engineRef.current.play(SPEED_MAP[speed]);
+      const effectiveSpeed = getEffectiveSpeed(speed, selectedAlgo);
+      engineRef.current.play(effectiveSpeed);
     }
-  }, [speed, playState]);
+  }, [speed, playState, selectedAlgo, getEffectiveSpeed]);
 
+  // ─── REMAINDER of the JSX (unchanged) ───
   return (
     <div
       style={{
@@ -644,7 +671,7 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>Gen:</span>
                 <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
-                  {[50, 100, 200, 500].map((value) => (
+                  {[10, 25, 50, 100].map((value) => (
                     <button
                       key={value}
                       onClick={() => setGenerations(value)}
@@ -728,7 +755,7 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>Gen:</span>
                 <div style={{ display: 'flex', gap: '3px', background: '#0f172a', padding: '3px', borderRadius: '6px' }}>
-                  {[50, 100, 200, 500].map((value) => (
+                  {[10, 25, 50, 100].map((value) => (
                     <button
                       key={value}
                       onClick={() => setGenerations(value)}
@@ -809,7 +836,7 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
           flexShrink: 0,
         }}
       >
-        {metadata || 'Select a size and press Play!'}
+        {metadata || `Select a size and press Play! | Global Max: ${globalMax.toFixed(4)}`}
       </div>
 
       {/* ─── DETAILS POPUP ─── */}

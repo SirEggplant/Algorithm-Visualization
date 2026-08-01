@@ -45,6 +45,7 @@ export function* simulatedAnnealingGenerator(
   let currentFitness = fitnessFn(current.x, current.y);
   let best = { ...current };
   let bestFitness = currentFitness;
+  let bestStep = 0;
   let temperature = initialTemp;
   let step = 0;
 
@@ -57,7 +58,7 @@ export function* simulatedAnnealingGenerator(
     metadata: {
       generation: 0,
       fitness: bestFitness,
-      action: `Temp: ${temperature.toFixed(1)} | Fitness: ${currentFitness.toFixed(4)}`,
+      action: `Temp: ${temperature.toFixed(1)} | Best found ${bestFitness.toFixed(4)} at step ${bestStep}`,
     },
   };
 
@@ -85,6 +86,7 @@ export function* simulatedAnnealingGenerator(
     if (currentFitness > bestFitness) {
       best = { ...current };
       bestFitness = currentFitness;
+      bestStep = step;
     }
 
     temperature *= coolingFactor;
@@ -101,7 +103,7 @@ export function* simulatedAnnealingGenerator(
         metadata: {
           generation: step,
           fitness: bestFitness,
-          action: `Temp: ${temperature.toFixed(1)} | Best: ${bestFitness.toFixed(4)}`,
+          action: `Temp: ${temperature.toFixed(1)} | Best found ${bestFitness.toFixed(4)} at step ${bestStep}`,
         },
       };
     }
@@ -114,7 +116,7 @@ export function* simulatedAnnealingGenerator(
     metadata: {
       generation: step,
       fitness: bestFitness,
-      action: `✅ Complete! Best fitness: ${bestFitness.toFixed(4)}`,
+      action: `✅ Complete! Best found ${bestFitness.toFixed(4)} at step ${bestStep}`,
       final: true,
     },
   };

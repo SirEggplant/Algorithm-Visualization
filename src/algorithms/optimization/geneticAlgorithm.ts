@@ -40,14 +40,18 @@ const mutate = (p: Point, rate: number, range: number): Point => {
 };
 
 export function* geneticAlgorithmGenerator(
-  popSize: number = 50,
+  popSize: number = 20,
   mutationRate: number = 0.1,
-  generations: number = 100,
+  generations: number = 25,
   range: number = 6,
   fitnessFunction: (x: number, y: number) => number = fitnessFn
 ): AlgorithmGenerator {
   fitnessFn = fitnessFunction;
   const rangeVal = range;
+
+  let globalBestPoint: Point | null = null;
+  let globalBestFitness = -Infinity;
+  let globalBestStep = 0;
 
   let population: Point[] = Array.from({ length: popSize }, () => randomPoint(rangeVal));
 
@@ -57,14 +61,20 @@ export function* geneticAlgorithmGenerator(
     const best = population[bestIdx];
     const bestFitness = fitnesses[bestIdx];
 
+    if (bestFitness > globalBestFitness) {
+      globalBestFitness = bestFitness;
+      globalBestPoint = { ...best };
+      globalBestStep = gen + 1;
+    }
+
     yield {
       type: 'scatter',
       data: population,
-      highlights: { coordinates: [best] },
+      highlights: { coordinates: [globalBestPoint!] },
       metadata: {
         generation: gen + 1,
-        fitness: bestFitness,
-        action: `Gen ${gen + 1}/${generations} | Best: ${bestFitness.toFixed(4)}`,
+        fitness: globalBestFitness,
+        action: `Gen ${gen + 1}/${generations} | Best found ${globalBestFitness.toFixed(4)} at step ${globalBestStep}`,
       },
     };
 
@@ -94,19 +104,26 @@ export function* geneticAlgorithmGenerator(
     population = nextPopulation;
   }
 
+  // Check final population one last time
   const finalFitnesses = population.map(p => fitnessFn(p.x, p.y));
   const bestIdx = finalFitnesses.indexOf(Math.max(...finalFitnesses));
   const best = population[bestIdx];
   const bestFitness = finalFitnesses[bestIdx];
 
+  if (bestFitness > globalBestFitness) {
+    globalBestFitness = bestFitness;
+    globalBestPoint = { ...best };
+    globalBestStep = generations;
+  }
+
   yield {
     type: 'scatter',
     data: population,
-    highlights: { coordinates: [best] },
+    highlights: { coordinates: [globalBestPoint!] },
     metadata: {
       generation: generations,
-      fitness: bestFitness,
-      action: `✅ Complete! Best fitness: ${bestFitness.toFixed(4)}`,
+      fitness: globalBestFitness,
+      action: `✅ Complete! Best found ${globalBestFitness.toFixed(4)} at step ${globalBestStep}`,
       final: true,
     },
   };

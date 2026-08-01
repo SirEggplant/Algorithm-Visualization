@@ -36,6 +36,7 @@ export function* hillClimbingGenerator(
   const allPeaks: Point[] = [];
   let bestOverall: Point | null = null;
   let bestOverallFitness = -Infinity;
+  let bestOverallStep = 0;
   let allVisitedPoints: Point[] = [];
   let globalStepCount = 0;
 
@@ -47,7 +48,6 @@ export function* hillClimbingGenerator(
     const climbPath: Point[] = [current];
     let localStepCount = 0;
 
-    // Show starting point
     const initialHighlights: Point[] = [];
     if (bestOverall) initialHighlights.push(bestOverall);
     for (const peak of allPeaks) {
@@ -67,7 +67,6 @@ export function* hillClimbingGenerator(
       },
     };
 
-    // Greedy ascent until stuck
     while (improved) {
       improved = false;
       localStepCount++;
@@ -121,20 +120,20 @@ export function* hillClimbingGenerator(
             generation: localStepCount,
             fitness: bestOverallFitness,
             action: restarts > 1
-              ? `Restart ${restart + 1}/${restarts} | Step ${localStepCount} | Fitness: ${currentFitness.toFixed(4)}`
-              : `Step ${localStepCount} | Fitness: ${currentFitness.toFixed(4)}`,
+              ? `Restart ${restart + 1}/${restarts} | Step ${localStepCount} | Peak: ${currentFitness.toFixed(4)}`
+              : `Step ${localStepCount} | Peak: ${currentFitness.toFixed(4)}`,
           },
         };
       }
     }
 
-    // Reached a local peak
     allPeaks.push(current);
     allVisitedPoints = allVisitedPoints.concat(climbPath);
 
     if (currentFitness > bestOverallFitness) {
       bestOverallFitness = currentFitness;
       bestOverall = current;
+      bestOverallStep = globalStepCount;
     }
 
     const restartHighlights: Point[] = [];
@@ -151,13 +150,12 @@ export function* hillClimbingGenerator(
         metadata: {
           generation: localStepCount,
           fitness: bestOverallFitness,
-          action: `Restart ${restart + 1}/${restarts} complete! Peak fitness: ${currentFitness.toFixed(4)}`,
+          action: `Restart ${restart + 1}/${restarts} complete! Peak: ${currentFitness.toFixed(4)}`,
         },
       };
     }
   }
 
-  // Final yield
   const finalHighlights: Point[] = [];
   if (bestOverall) finalHighlights.push(bestOverall);
   for (const peak of allPeaks) {
@@ -165,8 +163,8 @@ export function* hillClimbingGenerator(
   }
 
   const completionMessage = restarts > 1
-    ? `✅ All ${restarts} restarts complete! Best fitness: ${bestOverallFitness.toFixed(4)}`
-    : `✅ Stuck at local peak! Fitness: ${bestOverallFitness.toFixed(4)}`;
+    ? `✅ All ${restarts} restarts complete! Best found ${bestOverallFitness.toFixed(4)} at step ${bestOverallStep}`
+    : `✅ Stuck at local peak! Best found ${bestOverallFitness.toFixed(4)} at step ${bestOverallStep}`;
 
   yield {
     type: 'scatter',
