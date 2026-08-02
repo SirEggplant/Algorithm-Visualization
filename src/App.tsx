@@ -29,7 +29,7 @@ function App() {
       }}
     >
       <h1 style={{ textAlign: 'center', margin: '0 0 12px 0', fontSize: '24px', flexShrink: 0 }}>
-        ⚡ Algorithm Visualizer
+        Algorithm Visualizer
       </h1>
 
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>

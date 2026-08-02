@@ -74,25 +74,25 @@ const algorithmRegistry: Record<Feature, Record<string, AlgorithmEntry>> = {
   optimization: {
   hillClimbing: {
     id: 'hillClimbing',
-    displayName: '⛰️ Hill Climbing',
+    displayName: 'Hill Climbing',
     generator: hillClimbingGenerator as any,
     info: HILL_CLIMBING_INFO,
   },
   simulatedAnnealing: {
     id: 'simulatedAnnealing',
-    displayName: '🔥 Simulated Annealing',
+    displayName: 'Simulated Annealing',
     generator: simulatedAnnealingGenerator as any,
     info: SIMULATED_ANNEALING_INFO,
   },
   geneticAlgorithm: {
     id: 'geneticAlgorithm',
-    displayName: '🧬 Genetic Algorithm',
+    displayName: 'Genetic Algorithm',
     generator: geneticAlgorithmGenerator as any,
     info: GENETIC_ALGORITHM_INFO,
   },
   particleSwarm: {
     id: 'particleSwarm',
-    displayName: '🐝 Particle Swarm',
+    displayName: 'Particle Swarm',
     generator: particleSwarmGenerator as any,
     info: PARTICLE_SWARM_INFO,
   },
