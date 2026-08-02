@@ -163,8 +163,8 @@ export function* hillClimbingGenerator(
   }
 
   const completionMessage = restarts > 1
-    ? `✅ All ${restarts} restarts complete! Best found ${bestOverallFitness.toFixed(4)} at step ${bestOverallStep}`
-    : `✅ Stuck at local peak! Best found ${bestOverallFitness.toFixed(4)} at step ${bestOverallStep}`;
+    ? `All ${restarts} restarts complete! Best found ${bestOverallFitness.toFixed(4)} at step ${bestOverallStep}`
+    : `Stuck at local peak! Best found ${bestOverallFitness.toFixed(4)} at step ${bestOverallStep}`;
 
   yield {
     type: 'scatter',

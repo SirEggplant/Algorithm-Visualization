@@ -123,7 +123,7 @@ export function* geneticAlgorithmGenerator(
     metadata: {
       generation: generations,
       fitness: globalBestFitness,
-      action: `✅ Complete! Best found ${globalBestFitness.toFixed(4)} at step ${globalBestStep}`,
+      action: `Complete! Best found ${globalBestFitness.toFixed(4)} at step ${globalBestStep}`,
       final: true,
     },
   };

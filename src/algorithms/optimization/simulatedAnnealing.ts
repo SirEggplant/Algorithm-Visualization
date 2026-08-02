@@ -116,7 +116,7 @@ export function* simulatedAnnealingGenerator(
     metadata: {
       generation: step,
       fitness: bestFitness,
-      action: `✅ Complete! Best found ${bestFitness.toFixed(4)} at step ${bestStep}`,
+      action: `Complete! Best found ${bestFitness.toFixed(4)} at step ${bestStep}`,
       final: true,
     },
   };
