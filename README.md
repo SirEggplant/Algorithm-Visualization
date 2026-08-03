@@ -1,103 +1,129 @@
-# ⚡ Algorithm Visualizer
+# Algorithm Visualizer
 
-A modular, extensible interactive platform for visualizing sorting algorithms, search algorithms, and evolutionary simulations. Built with React, TypeScript, and Vite.
+A modular, extensible interactive platform for visualizing sorting algorithms, search algorithms, and optimization techniques. Built with React, TypeScript, and Vite.
 
-## ✨ Features
+---
 
-### 🔵 Sorting Algorithms
+## Features
+
+### Sorting Algorithms
 - **Bubble Sort** – Classic adjacent comparison sort.
 - **Merge Sort** – Divide-and-conquer with recursive merging.
 - **Quick Sort** – Efficient pivot-based partitioning.
 - **Insertion Sort** – Builds the sorted array one element at a time.
 - **Timsort** – Hybrid of Merge Sort and Insertion Sort (used in Python).
 - **Introsort** – Hybrid of Quick Sort, Heap Sort, and Insertion Sort.
-- *Easily add more sorting algorithms via the Registry.*
 
-### 🧬 Future Features (Planned)
-- **Hill Climbing** – Greedy local search with a 3D interactive mountain visualization. *(in progress)*
-- Genetic Algorithm (Ecosystem Simulation)
-- Firefly Algorithm (Swarm Intelligence)
-- Pathfinding (A*, Dijkstra)
+*Easily add more sorting algorithms via the Registry.*
 
-### 🎨 Interactive UI
+### Optimization Algorithms
+- **Hill Climbing** – Greedy local search with configurable restarts. Visualized on a 3D fitness landscape.
+- **Simulated Annealing** – Probabilistic search that mimics the cooling of metals, escaping local peaks.
+- **Genetic Algorithm** – Population-based optimization with selection, crossover, and mutation.
+- **Particle Swarm Optimization** – Swarm intelligence where particles converge on high-fitness regions.
+
+*All algorithms share the same 3D renderer and support split-screen comparison.*
+
+### Interactive UI
 - **Split Screen Mode** – Compare two algorithms side-by-side on the same data.
-- **Step-by-Step History** – Replay any step with a single click.
+- **Step-by-Step History** – Replay any step with a single click (sorting only).
 - **Algorithm Details** – View time and space complexity for each algorithm.
 - **Multiple Array Sizes** – Choose from 25, 50, 100, or 200 elements.
+- **Multiple Mountain Sizes** – Four unique fitness landscapes with hardcoded global maxima.
 - **Speed Controls** – Slow, Normal, Fast, and Turbo modes.
 
-## 🏗️ Architecture
+### Planned Features
+- **Ecosystem Simulation** – Agent-based slime simulator with inheritable traits, natural selection, and emergent behavior.
+- **Firefly Algorithm** – Swarm optimization with bioluminescent attraction.
+- **Pathfinding** – A*, Dijkstra, and BFS on grid-based maps.
 
-### Core Components
+---
+
+## Architecture
 
 ```
 src/
-├── core/                  # Shared engine & types
-│   ├── engine.ts          # Play/Pause/Step generator engine
-│   └── types.ts           # Universal state contracts
+├── core/                        # Shared engine & types
+│   ├── engine.ts                # Play/Pause/Step generator engine
+│   └── types.ts                 # Universal state contracts
 │
-├── algorithms/            # Algorithm implementations
-│   ├── sorting/           # All sorting algorithms
+├── algorithms/                  # Algorithm implementations
+│   ├── sorting/
 │   │   ├── bubbleSort.ts
 │   │   ├── mergeSort.ts
 │   │   ├── quickSort.ts
 │   │   ├── insertionSort.ts
 │   │   ├── timsort.ts
 │   │   └── introsort.ts
-│   ├── hillClimbing/       # Search/optimization algorithms (in progress)
-│   │   └── peakFinder.ts
-│   └── registry.ts        # Single source of truth for ALL algorithms
+│   ├── optimization/
+│   │   ├── hillClimbing.ts
+│   │   ├── simulatedAnnealing.ts
+│   │   ├── geneticAlgorithm.ts
+│   │   └── particleSwarm.ts
+│   └── registry.ts              # Single source of truth for all algorithms
 │
-├── renderers/              # Canvas drawing functions
-│   ├── arrayRenderer.ts    # Renders bar charts
-│   └── scatterRenderer.ts  # Renders 3D scatter plots (Three.js)
+├── renderers/
+│   ├── arrayRenderer.ts         # Bar chart rendering (2D Canvas)
+│   └── scatterRenderer.ts       # 3D scatter plot rendering (Three.js)
 │
-├── ui/                     # React components
-│   └── HistoryLog.tsx      # Step history sidebar
+├── ui/
+│   └── HistoryLog.tsx           # Step history sidebar (sorting only)
 │
-└── App.tsx                 # Main orchestrator
+├── components/
+│   ├── sorting/
+│   │   └── SortingFeature.tsx
+│   └── optimization/
+│       └── OptimizationFeature.tsx
+│
+└── App.tsx                      # Main orchestrator
 ```
 
 ### How It Works
 
-1. **The Engine (`core/engine.ts`)** – A generic playback engine that handles Play, Pause, Step, and Stop using JavaScript generators. It doesn't know about specific algorithms or renderers.
+1. **The Engine (`core/engine.ts`)** – A generic playback engine that handles Play, Pause, Step, and Stop using JavaScript generators. It has no knowledge of specific algorithms or renderers.
 
-2. **The Registry (`algorithms/registry.ts`)** – A single source of truth that registers every algorithm with its generator, display name, and metadata. Adding a new algorithm is as simple as adding one entry to the registry.
+2. **The Registry (`algorithms/registry.ts`)** – A single source of truth that registers every algorithm with its generator, display name, and metadata. Adding a new algorithm requires only one entry in the registry.
 
 3. **The Renderers (`renderers/`)** – Pure drawing functions that take a `VisualizationState` and draw it on the canvas. They are completely decoupled from algorithm logic.
 
 4. **App.tsx** – The controller that connects the engine, registry, and renderers. It manages state, routing, and the UI.
 
-### The Data Flow
+### Data Flow
 
 ```
 User clicks "Play"
-    ↓
-App.tsx calls engine.load(algorithmGenerator)
-    ↓
-engine.play() starts the generator
-    ↓
-Algorithm yields a VisualizationState (e.g., { type: 'array', data: [...], highlights: {...} })
-    ↓
+        ↓
+App.tsx loads the algorithm generator into the engine
+        ↓
+engine.play() steps through the generator
+        ↓
+Algorithm yields a VisualizationState
+        ↓
 engine.onUpdate() passes the state to App.tsx
-    ↓
-App.tsx routes the state to the appropriate renderer (drawArray or drawScatter)
-    ↓
+        ↓
+App.tsx routes the state to the appropriate renderer
+        ↓
 Renderer draws the state on the canvas
-    ↓
+        ↓
 User sees the animation
 ```
 
-## 🚀 Getting Started
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- Node.js (v18 or higher)
+- Node.js v18 or higher
 - npm
 
 ### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/yourusername/algorithm-visualizer.git
+cd algorithm-visualizer
+
 # Install dependencies
 npm install
 
@@ -107,11 +133,37 @@ npm run dev
 
 The app will be available at `http://localhost:5173`.
 
-## 🧩 Adding a New Algorithm
+### Building for Production
+
+```bash
+npm run build
+```
+
+---
+
+## Adding a New Algorithm
 
 1. Create a generator function in the appropriate folder under `src/algorithms/`.
-2. Have it `yield` `VisualizationState` objects at each meaningful step.
+2. Have it yield `VisualizationState` objects at each meaningful step.
 3. Register it in `algorithms/registry.ts` with a display name and metadata (time/space complexity, category, etc.).
-4. If it needs a new visual format, add a renderer in `src/renderers/`.
+4. If it requires a new visual format, add a renderer in `src/renderers/`.
 
-That's it — the engine, UI, and history log all work automatically once an algorithm is registered.
+The engine, UI, and history log all work automatically once an algorithm is registered.
+
+---
+
+## Technology Stack
+
+| Technology | Purpose |
+| :--- | :--- |
+| React 18 | UI framework |
+| TypeScript | Type safety and developer experience |
+| Vite | Build tool and dev server |
+| Three.js | 3D rendering for optimization landscapes |
+| HTML5 Canvas | 2D rendering for bar charts |
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
