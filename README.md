@@ -22,8 +22,6 @@ A modular, extensible interactive platform for visualizing sorting algorithms, s
 - **Genetic Algorithm** – Population-based optimization with selection, crossover, and mutation.
 - **Particle Swarm Optimization** – Swarm intelligence where particles converge on high-fitness regions.
 
-*All algorithms share the same 3D renderer and support split-screen comparison.*
-
 ### Interactive UI
 - **Split Screen Mode** – Compare two algorithms side-by-side on the same data.
 - **Step-by-Step History** – Replay any step with a single click (sorting only).
@@ -33,8 +31,6 @@ A modular, extensible interactive platform for visualizing sorting algorithms, s
 - **Speed Controls** – Slow, Normal, Fast, and Turbo modes.
 
 ### Planned Features
-- **Ecosystem Simulation** – Agent-based slime simulator with inheritable traits, natural selection, and emergent behavior.
-- **Firefly Algorithm** – Swarm optimization with bioluminescent attraction.
 - **Pathfinding** – A*, Dijkstra, and BFS on grid-based maps.
 
 ---
@@ -120,9 +116,6 @@ User sees the animation
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/algorithm-visualizer.git
-cd algorithm-visualizer
 
 # Install dependencies
 npm install
@@ -141,12 +134,11 @@ npm run build
 
 ---
 
-## Adding a New Algorithm
+## Adding a New Algorithm for Sorting
 
-1. Create a generator function in the appropriate folder under `src/algorithms/`.
+1. Create a generator function in the folder under `src/algorithms/sorting/`.
 2. Have it yield `VisualizationState` objects at each meaningful step.
 3. Register it in `algorithms/registry.ts` with a display name and metadata (time/space complexity, category, etc.).
-4. If it requires a new visual format, add a renderer in `src/renderers/`.
 
 The engine, UI, and history log all work automatically once an algorithm is registered.
 
