@@ -39,7 +39,7 @@ const featureDisplayNames: Record<Feature, string> = {
   optimization: 'Optimization',
 };
 
-// ─── ✅ CORRECTED HARDCODED GLOBAL MAXIMA ───
+// ─── GLOBAL MAXIMA ───
 const MOUNTAIN_CONFIGS: Record<MountainSize, { range: number; resolution: number; globalMax: number }> = {
   small: { range: 4, resolution: 50, globalMax: 1.4591 },
   medium: { range: 6, resolution: 70, globalMax: 2.568 },
@@ -161,7 +161,6 @@ const OptimizationFeature: React.FC<OptimizationFeatureProps> = ({
     engineRef.current['generator'] = null;
 
     clearScene(canvasRef.current);
-    // ❌ REMOVED: resetCamera(canvasRef.current); – camera stays where the user left it
 
     setPlayState('idle');
     setMetadata(`Ready to explore! | Global Max: ${globalMax.toFixed(4)}`);
@@ -300,7 +299,6 @@ const updateUIWithState = useCallback((state: VisualizationState) => {
     const fitnessFn = getFitnessFunction(mountainSize);
     setFitnessFunction(fitnessFn);
     rebuildTerrain(canvasRef.current, config.range, config.resolution);
-    // ✅ Only here we reset the camera (when the terrain changes)
     resetCamera(canvasRef.current);
     fullReset();
   }, [mountainSize, fullReset]);
@@ -431,7 +429,7 @@ const updateUIWithState = useCallback((state: VisualizationState) => {
               onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#38bdf8')}
               onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#475569')}
             >
-              📖
+              Details
             </button>
           </div>
 
@@ -892,10 +890,10 @@ const updateUIWithState = useCallback((state: VisualizationState) => {
               marginTop: '4px',
             }}
           >
-            <span>⚡ Best: {currentAlgoInfo.bestCase}</span>
-            <span>📊 Avg: {currentAlgoInfo.avgCase}</span>
-            <span>🐌 Worst: {currentAlgoInfo.worstCase}</span>
-            <span>💾 Space: {currentAlgoInfo.spaceComplexity}</span>
+            <span> Best: {currentAlgoInfo.bestCase}</span>
+            <span> | Avg: {currentAlgoInfo.avgCase}</span>
+            <span> | Worst: {currentAlgoInfo.worstCase}</span>
+            <span> | Space: {currentAlgoInfo.spaceComplexity}</span>
           </div>
         </div>
       )}
